@@ -1,15 +1,60 @@
-#include "LitPipeline.h"
+#include "PBRPipeline.h"
 #include "AssetManager/Model/MeshData.h"
+#include "AssetManager/Texture/Texture.h"
+#include "Rendering/RenderingInterface.h"
+#include "Rendering/Vulkan/RenderUtilities.h"
 
 #include <iostream>
 
-void LitPipeline::DestroyPipeline()
+void PBRPipeline::DestroyPipeline()
 {
-	vkDestroyDescriptorSetLayout(context.device, samplerLayout, nullptr);
+	vkDestroyDescriptorSetLayout(context.device, samplerSetLayout, nullptr);
 	RenderPipeline::DestroyPipeline();
 }
 
-void LitPipeline::CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& vertexInputInfo)
+void PBRPipeline::AllocateDescriptorSet(GenericHandle& outDescriptorSet)
+{
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = context.descriptorPool;
+	allocInfo.descriptorSetCount = 1;
+	allocInfo.pSetLayouts = &samplerSetLayout;
+
+	VkDescriptorSet descriptorSet;
+	if (vkAllocateDescriptorSets(context.device, &allocInfo, &descriptorSet) != VK_SUCCESS)
+	{
+		std::cerr << "Failed to allocate global descriptor sets!" << std::endl;
+	}
+
+	outDescriptorSet = RenderUtilities::DescriptorSetToGenericHandle(descriptorSet);
+}
+
+void PBRPipeline::UpdateDescriptorSet(GenericHandle descriptorSet, const TextureSetKey& key)
+{
+	const int32_t descriptorsCount = key.views.size();
+
+	VkWriteDescriptorSet* descriptorWrites = new VkWriteDescriptorSet[descriptorsCount]{};
+	for (int32_t i = 0; i < descriptorsCount; ++i)
+	{
+		VkDescriptorImageInfo imageInfo{};
+		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		imageInfo.imageView = RenderUtilities::GenericHandleToImageView(key.views[i]);
+		imageInfo.sampler = RenderUtilities::GenericHandleToImageSampler(key.samplers[i]);
+
+		descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[i].dstSet = RenderUtilities::GenericHandleToDescriptorSet(descriptorSet);
+		descriptorWrites[i].dstBinding = i;
+		descriptorWrites[i].dstArrayElement = 0;
+		descriptorWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrites[i].descriptorCount = 1;
+		descriptorWrites[i].pImageInfo = &imageInfo;
+	}
+
+	vkUpdateDescriptorSets(context.device, descriptorsCount, descriptorWrites, 0, nullptr);
+	delete[] descriptorWrites;
+}
+
+void PBRPipeline::CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& vertexInputInfo)
 {
 	VkVertexInputBindingDescription* bindingDescription = new VkVertexInputBindingDescription[1];
 	VkVertexInputAttributeDescription* attributeDescriptions = new VkVertexInputAttributeDescription[5];
@@ -50,7 +95,7 @@ void LitPipeline::CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& ve
 	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions;
 }
 
-void LitPipeline::CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSetLayout>& outDescriptorSetLayouts)
+void PBRPipeline::CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSetLayout>& outDescriptorSetLayouts)
 {
 	const uint32_t bindingCount = 4;
 	VkDescriptorSetLayoutBinding* uboLayoutBinding = new VkDescriptorSetLayoutBinding[bindingCount];
@@ -81,12 +126,12 @@ void LitPipeline::CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSet
 	VkDescriptorSetLayoutCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	createInfo.bindingCount = bindingCount;
-	createInfo.pBindings = uboLayoutBinding;	
+	createInfo.pBindings = uboLayoutBinding;
 
-	if (vkCreateDescriptorSetLayout(context.device, &createInfo, nullptr, &samplerLayout) != VK_SUCCESS)
+	if (vkCreateDescriptorSetLayout(context.device, &createInfo, nullptr, &samplerSetLayout) != VK_SUCCESS)
 	{
 		std::cerr << "Failed to create descriptor set layout for samplers!" << std::endl;
 	}
 
-	outDescriptorSetLayouts.push_back(samplerLayout);	
+	outDescriptorSetLayouts.push_back(samplerSetLayout);
 }

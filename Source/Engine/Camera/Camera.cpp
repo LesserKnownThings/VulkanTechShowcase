@@ -35,10 +35,10 @@ Camera::Camera(const glm::vec3& initialPosition, const glm::vec3& initialRotatio
 	GameEngine->GetRenderingSystem()->onWindowResizeParams.Bind(this, &Camera::HandleWindowResize);
 	TaskManager::Get().RegisterTask(this, &Camera::Tick, TICK_HANDLE);
 
-	UpdateProjectionType();
-	UpdateVectors();
-
 	SetRotation(initialRotation);
+
+	UpdateProjectionType();
+	UpdateVectors();	
 }
 
 void Camera::ChangeType(ECameraType inType)
@@ -193,7 +193,7 @@ void Camera::SetOrthographicCamera()
 	float right = ortographicSize * aspectRatio;
 
 	projection = glm::ortho(left, right, -ortographicSize, ortographicSize, -cameraZ, cameraZ);
-	projection[1][1] *= -1;
+	projection[1][1] *= -1; // Flip Y because glm uses Open GL coordinates
 }
 
 void Camera::UpdateVectors()

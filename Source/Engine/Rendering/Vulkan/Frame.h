@@ -1,5 +1,8 @@
 #pragma once
 
+#include "EngineName.h"
+#include "VkContext.h"
+
 #include <volk.h>
 
 struct VkContext;
@@ -12,14 +15,12 @@ public:
 	
 	void Destroy(const VkContext& context);
 
-	VkCommandBuffer drawCommandBuffer = VK_NULL_HANDLE;
+	VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
 
 	VkSemaphore imageAvailableSemaphore = VK_NULL_HANDLE;
 	VkSemaphore renderFinishedSemaphore = VK_NULL_HANDLE;
 	VkFence inFlightFence = VK_NULL_HANDLE;
 
-	VkCommandBuffer transferCommandBuffer = VK_NULL_HANDLE;
-	VkSemaphore transferFinishedSemaphore = VK_NULL_HANDLE;
-
-	const bool supportsTransfer = false;
+	std::unordered_map<EngineName, AllocatedBufferData> globalUniforms;
+	VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 };

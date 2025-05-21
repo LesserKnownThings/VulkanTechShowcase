@@ -5,32 +5,16 @@
 #include <vector>
 
 Frame::Frame(const VkContext& context)
-	: supportsTransfer(context.transferQueue != VK_NULL_HANDLE)
 {
-	const uint32_t buffersCount = supportsTransfer ? 2 : 1;
-	std::vector<VkCommandBuffer> buffers(buffersCount);
-
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandPool = context.commandPool;
+	allocInfo.commandPool = context.graphicsCommandPool;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandBufferCount = buffersCount;
+	allocInfo.commandBufferCount = 1;
 
-	
-	if (supportsTransfer)
-	{
-		buffers.push_back(transferCommandBuffer);
-	}
-
-	if (vkAllocateCommandBuffers(context.device, &allocInfo, buffers.data()) != VK_SUCCESS)
+	if (vkAllocateCommandBuffers(context.device, &allocInfo, &commandBuffer) != VK_SUCCESS)
 	{
 		std::cerr << "Failed to allocate command buffers!" << std::endl;
-	}
-
-	drawCommandBuffer = buffers[0];
-	if (supportsTransfer)
-	{
-		transferCommandBuffer = buffers[1];
 	}
 
 	VkSemaphoreCreateInfo semaphoreInfo{};
@@ -42,7 +26,6 @@ Frame::Frame(const VkContext& context)
 
 	if (vkCreateSemaphore(context.device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS ||
 		vkCreateSemaphore(context.device, &semaphoreInfo, nullptr, &renderFinishedSemaphore) != VK_SUCCESS ||
-		vkCreateSemaphore(context.device, &semaphoreInfo, nullptr, &transferFinishedSemaphore) != VK_SUCCESS ||
 		vkCreateFence(context.device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS)
 	{
 		std::cerr << "Failed to create semaphores!" << std::endl;
@@ -53,6 +36,12 @@ void Frame::Destroy(const VkContext& context)
 {
 	vkDestroySemaphore(context.device, imageAvailableSemaphore, nullptr);
 	vkDestroySemaphore(context.device, renderFinishedSemaphore, nullptr);
-	vkDestroySemaphore(context.device, transferFinishedSemaphore, nullptr);
 	vkDestroyFence(context.device, inFlightFence, nullptr);
+
+	for (const auto& it : globalUniforms)
+	{
+		const AllocatedBufferData& data = it.second;
+
+		vmaDestroyBuffer(context.allocator, data.buffer, data.memory);
+	}
 }

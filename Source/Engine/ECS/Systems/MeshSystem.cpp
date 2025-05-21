@@ -26,7 +26,7 @@ void MeshSystem::HandleEntityRemoved(const Entity& entity)
 	if (it != instances.end())
 	{
 		const uint32_t cID = it->second;
-		component.isAlive[cID] = false;
+		component.state[cID] = EComponentState::Dead;
 		pendingDeletion.push_back(cID);
 	}
 }
@@ -44,7 +44,7 @@ uint32_t MeshSystem::CreateComponent(const Entity& entity, LazyAssetPtr& model)
 	component.instances++;
 
 	component.entity[cID] = entity;
-	component.isAlive[cID] = true;
+	component.state[cID] = EComponentState::Ready;
 
 	cachedModels[cID] = std::move(model);
 
@@ -94,7 +94,7 @@ void MeshSystem::DestroyComponent(uint32_t componentID)
 	const Entity lastEntity = component.entity[last];
 
 	component.entity[componentID] = component.entity[last];
-	component.isAlive[componentID] = component.isAlive[last];
+	component.state[componentID] = component.state[last];
 
 	cachedModels[componentID] = std::move(cachedModels[last]);
 	cachedModels.erase(last);
@@ -108,17 +108,17 @@ void MeshSystem::Allocate(int32_t size)
 {
 	Component newComponent;
 
-	const int32_t sizeToAllocate = size * (sizeof(Entity) + sizeof(uint8_t));
+	const int32_t sizeToAllocate = size * (sizeof(Entity) + sizeof(EComponentState));
 	newComponent.buffer = malloc(sizeToAllocate);
 
 	newComponent.instances = component.instances;
 	newComponent.allocatedInstances = size;
 
 	newComponent.entity = (Entity*)(newComponent.buffer);
-	newComponent.isAlive = (uint8_t*)(newComponent.entity + size);
+	newComponent.state = (EComponentState*)(newComponent.entity + size);
 
 	memcpy(newComponent.entity, component.entity, component.instances * sizeof(Entity));
-	memcpy(newComponent.isAlive, component.isAlive, component.instances * sizeof(uint8_t));
+	memcpy(newComponent.state, component.state, component.instances * sizeof(EComponentState));
 
 	free(component.buffer);
 	component = newComponent;

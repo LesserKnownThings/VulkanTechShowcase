@@ -15,3 +15,9 @@ struct CameraMatrices
 	alignas(16) glm::mat4 projection;
 	alignas(16) glm::mat4 view;
 };
+
+struct Light
+{
+	alignas(16) glm::vec4 color;
+	alignas(16) glm::vec3 position;
+};

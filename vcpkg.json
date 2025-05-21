@@ -8,6 +8,7 @@
     "vulkan-memory-allocator",
     "volk",
     "assimp",
-    "glm"
+    "glm",
+    "stb"
   ]
 }

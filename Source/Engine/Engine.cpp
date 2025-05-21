@@ -1,5 +1,6 @@
 #include "Engine.h"
 #include "AssetManager/AssetManager.h"
+#include "ECS/Systems/MaterialSystem.h"
 #include "ECS/Systems/MeshSystem.h"
 #include "ECS/Systems/TransformSystem.h"
 #include "Input/InputSystem.h"
@@ -123,6 +124,10 @@ void Engine::InitializeECSSystems()
 	TransformSystem* transformSystem = &TransformSystem::Get();
 	transformSystem->Initialize();
 	ecsSystems.push_back(transformSystem);
+
+	MaterialSystem* materialSystem = &MaterialSystem::Get();
+	materialSystem->Initialize();
+	ecsSystems.push_back(materialSystem);
 }
 
 void Engine::UnInitializeECSSystems()

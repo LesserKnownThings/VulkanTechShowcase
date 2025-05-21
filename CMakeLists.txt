@@ -14,7 +14,7 @@ add_compile_definitions(VK_NO_PROTOTYPES)
 
 find_package(sdl3 CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
-find_package(vulkan REQUIRED)
+find_package(Vulkan REQUIRED)
 find_package(volk CONFIG REQUIRED)
 ##########################
 

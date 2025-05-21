@@ -1,4 +1,6 @@
 #include "RenderingInterface.h"
+#include "Engine.h"
+#include "Input/InputSystem.h"
 #include "TaskManager.h"
 
 #include <SDL3/SDL.h>
@@ -11,11 +13,18 @@ bool RenderingInterface::Initialize(int32_t inWidth, int32_t inHeight)
 		height = inHeight;
 	}
 
+	InputSystem* inputSystem = GameEngine->GetInputSystem();
+	inputSystem->onWindowResize.Bind(this, &RenderingInterface::HandleWindowResized);
+	inputSystem->onWindowMinimized.Bind(this, &RenderingInterface::HandleWindowMinimized);
+
 	return true;
 }
 
 void RenderingInterface::UnInitialize()
 {
+	InputSystem* inputSystem = GameEngine->GetInputSystem();
+	inputSystem->onWindowResize.Clear(this);
+	inputSystem->onWindowMinimized.Clear(this);
 	SDL_DestroyWindow(window);
 }
 

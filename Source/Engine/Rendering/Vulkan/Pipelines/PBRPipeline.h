@@ -2,10 +2,15 @@
 
 #include "Rendering/Vulkan/RenderPipeline.h"
 
-class LitPipeline : public RenderPipeline
+#include <vector>
+
+class PBRPipeline : public RenderPipeline
 {
 public:
 	void DestroyPipeline() override;
+
+	void AllocateDescriptorSet(GenericHandle& outDescriptorSet) override;
+	void UpdateDescriptorSet(GenericHandle descriptorSet, const TextureSetKey& key) override;
 
 protected:
 	void CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& vertexInputInfo) override;
@@ -13,5 +18,5 @@ protected:
 	std::string GetShaderPath() const override { return "Data/Engine/Shaders/Lit"; }
 
 private:
-	VkDescriptorSetLayout samplerLayout = VK_NULL_HANDLE;
+	VkDescriptorSetLayout samplerSetLayout = VK_NULL_HANDLE;
 };

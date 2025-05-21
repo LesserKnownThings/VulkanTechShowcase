@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EngineName.h"
+#include "Rendering/Material/Material.h"
 #include "VkContext.h"
 
 #include <glm/glm.hpp>
@@ -9,16 +10,20 @@
 #include <vector>
 #include <volk.h>
 
+class Texture;
+
 class RenderPipeline
 {
 public:
 	virtual void Initialize(const VkContext& inContext);
 	virtual void DestroyPipeline();
 
+	virtual void AllocateDescriptorSet(GenericHandle& outDescriptorSet) = 0;
+	virtual void UpdateDescriptorSet(GenericHandle descriptorSet, const TextureSetKey& key) = 0;
+
 	VkPipeline GetPipeline() const { return graphicsPipeline; }
 	VkPipelineLayout GetLayout() const { return pipelineLayout; }
 	const std::string& GetName() const { return name; }
-	uint32_t GetDescriptorSetCount() const { return descriptorSetCount; }
 
 protected:
 	virtual void CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& vertexInputInfo) = 0;
@@ -34,8 +39,6 @@ protected:
 
 	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
-
-	uint32_t descriptorSetCount = 0;
 
 	std::vector<VkDynamicState> dynamicStates =
 	{

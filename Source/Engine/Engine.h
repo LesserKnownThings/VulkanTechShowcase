@@ -23,7 +23,10 @@ public:
 
 	void Run();
 
+	float GetDeltaTime() const { return deltaTime; }
+
 	RenderingInterface* GetRenderingSystem() const { return renderingInterface; }
+	InputSystem* GetInputSystem() const { return inputSystem; }
 
 private:
 	void InitializeECSSystems();
@@ -34,9 +37,9 @@ private:
 	InputSystem* inputSystem = nullptr;
 	RenderingInterface* renderingInterface = nullptr;
 	SDLInterface* sdlInterface = nullptr;
-	
+
 	World* currentWorld = nullptr;
-	
+
 	std::vector<SystemBase*> ecsSystems;
 
 	bool isRunning = false;

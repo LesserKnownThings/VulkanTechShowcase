@@ -1,31 +1,38 @@
 #include "World.h"
 #include "Camera/Camera.h"
 #include "Engine.h"
+#include "Rendering/AbstractData.h"
 #include "Rendering/RenderingInterface.h"
 #include "TaskManager.h"
 
 #include "AssetManager/AssetManager.h"
 #include "AssetManager/LazyAssetPtr.h"
 #include "AssetManager/Model/Model.h"
+#include "AssetManager/Texture/Texture.h"
 #include "ECS/EntityManager.h"
+#include "ECS/Systems/MaterialSystem.h"
 #include "ECS/Systems/MeshSystem.h"
 #include "ECS/Systems/TransformSystem.h"
 
 void World::Initialize()
 {
-	camera = new Camera();
+	camera = new Camera(glm::vec3(0.0f, 1.5f, 3.5f));
 	TaskManager::Get().RegisterTask(this, &World::Tick, TICK_HANDLE);
 	TaskManager::Get().RegisterTask(this, &World::Draw, RENDER_HANDLE);
 
 	Entity entity = EntityManager::Get().CreateEntity();
 
-	AssetManager::Get().GetAsset<Model>("Meshes\\Cube", [entity](LazyAssetPtr& asset)
-		{
-			MeshSystem::Get().CreateComponent(entity, asset);
-		});
-	TransformSystem::Get().CreateComponent(entity, true);
-	entities.push_back(entity);
+	LazyAssetPtr assets[2];
+	AssetManager::Get().QueryAssets<Texture, Model>(assets, "Textures\\viking_room", "Meshes\\viking_room");
 
+	if (assets[0].IsValid() && assets[1].IsValid())
+	{
+		MaterialSystem::Get().CreateComponent(entity, static_cast<uint8_t>(EPipelineType::PBR), assets, 1);
+		MeshSystem::Get().CreateComponent(entity, assets[1]);
+	}
+
+	TransformSystem::Get().CreateComponent(entity, true, glm::vec3(0.0f), glm::vec3(-90.0f, 0.0f, -135.0f), glm::vec3(2.0f));
+	entities.push_back(entity);
 }
 
 void World::UnInitialize()
@@ -47,5 +54,5 @@ void World::Draw()
 
 void World::Tick(float deltaTime)
 {
-	TransformSystem::Get().Rotate(entities[0], 5.0f * deltaTime * 15.0f, glm::vec3(1.0f));
+	//TransformSystem::Get().Rotate(entities[0], 100.0f * deltaTime, glm::vec3(0.0f, 0.0f, -1.0f));
 }

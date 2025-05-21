@@ -61,7 +61,7 @@ protected:
     ECameraType cameraType = Perspective;
 
     //***Perspective settings
-    float fieldOfView = 45.0f;
+    float fieldOfView = 60.0f;
     float nearView = 1.0f;
     float farView = 1024.1f;
 

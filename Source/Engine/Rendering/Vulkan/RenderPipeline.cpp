@@ -1,6 +1,7 @@
 #include "RenderPipeline.h"
 #include "Rendering/SharedUniforms.h"
 #include "Rendering/Vulkan/PushConstant.h"
+#include "Rendering/Vulkan/RenderUtilities.h"
 #include "Utilities/FileHelper.h"
 
 #include <iostream>
@@ -79,7 +80,7 @@ void RenderPipeline::Initialize(const VkContext& inContext)
 	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizer.lineWidth = 1.0f;
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	//rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE; // TODO need to test this more with assimp
 	rasterizer.depthBiasEnable = VK_FALSE;
 	rasterizer.depthBiasConstantFactor = 0.0f;
 	rasterizer.depthBiasClamp = 0.0f;
@@ -87,9 +88,9 @@ void RenderPipeline::Initialize(const VkContext& inContext)
 
 	VkPipelineMultisampleStateCreateInfo multisampling{};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-	multisampling.minSampleShading = 1.0f;
+	multisampling.sampleShadingEnable = VK_TRUE;
+	multisampling.rasterizationSamples = context.msaaSamples;
+	multisampling.minSampleShading = 0.2f;
 	multisampling.pSampleMask = nullptr;
 	multisampling.alphaToCoverageEnable = VK_FALSE;
 	multisampling.alphaToOneEnable = VK_FALSE;
@@ -131,16 +132,14 @@ void RenderPipeline::Initialize(const VkContext& inContext)
 		context.globalDescriptorSetLayout
 	};
 
-	//CreatePipelineDescriptorLayoutSets(descriptorSetLayouts);
-
-	descriptorSetCount = descriptorSetLayouts.size();
+	CreatePipelineDescriptorLayoutSets(descriptorSetLayouts);
 
 	VkPushConstantRange pushConstant{};
 	pushConstant.offset = 0;
 	pushConstant.size = sizeof(SingleEntityConstant);
 	pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-	pipelineLayoutInfo.setLayoutCount = descriptorSetCount;
+	pipelineLayoutInfo.setLayoutCount = descriptorSetLayouts.size();
 	pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
 
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
@@ -151,6 +150,18 @@ void RenderPipeline::Initialize(const VkContext& inContext)
 		std::cerr << "Failed to create pipeline layout!" << std::endl;
 	}
 
+	VkPipelineDepthStencilStateCreateInfo depthStencil{};
+	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depthStencil.depthTestEnable = VK_TRUE;
+	depthStencil.depthWriteEnable = VK_TRUE;
+	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+	depthStencil.depthBoundsTestEnable = VK_FALSE;
+	depthStencil.minDepthBounds = 0.0f;
+	depthStencil.maxDepthBounds = 1.0f;
+	depthStencil.stencilTestEnable = VK_FALSE;
+	depthStencil.front = {};
+	depthStencil.back = {};
+
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineInfo.stageCount = 2;
@@ -160,7 +171,7 @@ void RenderPipeline::Initialize(const VkContext& inContext)
 	pipelineInfo.pViewportState = &viewportState;
 	pipelineInfo.pRasterizationState = &rasterizer;
 	pipelineInfo.pMultisampleState = &multisampling;
-	pipelineInfo.pDepthStencilState = nullptr;
+	pipelineInfo.pDepthStencilState = &depthStencil;
 	pipelineInfo.pColorBlendState = &colorBlending;
 	pipelineInfo.pDynamicState = &dynamicState;
 	pipelineInfo.layout = pipelineLayout;

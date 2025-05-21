@@ -14,6 +14,7 @@ bool Model::LoadAsset(const std::string& path)
 	{
 		const MeshData& meshData = meshes[i];
 		MeshRenderData& mRenderData = renderData[i];
+		mRenderData.state = ERenderDataLoadState::Loading;
 		renderingInterface->CreateMeshVertexBuffer(meshData, mRenderData);
 	}
 

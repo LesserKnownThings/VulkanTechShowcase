@@ -38,7 +38,7 @@ void AssetManager::ImportAssets()
 			std::string assetPath = path.fullPath;
 			assetPath.erase(dirPos, importDirectory.size() + 1);
 			assetPath.erase(assetPath.size() - path.extension.size(), path.extension.size());
-			assets.emplace(assetPath, LazyAssetPtr{ path });
+			assets[assetPath] = LazyAssetPtr{ path };
 		}
 	}
 }

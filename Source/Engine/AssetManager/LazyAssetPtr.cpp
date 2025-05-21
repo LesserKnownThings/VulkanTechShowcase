@@ -7,15 +7,15 @@ LazyAssetPtr::~LazyAssetPtr()
 
 void LazyAssetPtr::DecrementAssetCounter()
 {
-	if (refCounter && ptr)
+	if (!(flags & FLAG_IS_COPY) && refCounter)
 	{
 		refCounter->Decrement();
 
-		if (refCounter->counter == 0)
+		if (refCounter->counter == 0 && ptr != nullptr)
 		{
 			ptr->UnloadAsset();
-			ptr = nullptr;
 			delete ptr;
+			ptr = nullptr;
 		}
 	}
 }
@@ -27,5 +27,5 @@ void LazyAssetPtr::SetPath(const AssetPath& inPath)
 
 bool LazyAssetPtr::IsValid() const
 {
-	return ptr != nullptr;
+	return flags & FLAG_IS_VALID;
 }
