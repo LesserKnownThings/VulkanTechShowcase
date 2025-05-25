@@ -15,10 +15,8 @@
 
 class RenderPipeline;
 
-struct Entity;
 struct MeshData;
 struct MeshRenderData;
-struct VulkanRenderData;
 
 constexpr uint32_t NVIGIA_GPU = 0x10DE;
 constexpr uint32_t AMD_GPU = 0x1002;
@@ -39,13 +37,6 @@ struct SingleTimeCommandBuffer
 	VkQueue queue = VK_NULL_HANDLE;
 };
 
-struct AllocatedImageBuffer
-{
-	VkImage image;
-	VkImageView imageView;
-	VmaAllocation memory;
-};
-
 class VulkanRendering : public RenderingInterface
 {
 public:
@@ -53,25 +44,37 @@ public:
 	void UnInitialize() override;
 
 	void DrawFrame() override;
-	void DrawSingle(const Entity& entity) override;
+	void DrawSingle(const std::vector<entt::entity>& entities, const entt::registry& registry) override;
+	void DrawLight(const std::vector<entt::entity>& entities, const entt::registry& registry) override;
 	void EndFrame() override;
+
+	// Material descriptors
+	void AllocateMaterialDescriptorSet(EPipelineType pipeline, GenericHandle& outDescriptorSet) override;
+	void UpdateMaterialDescriptorSet(EPipelineType pipeline, const std::unordered_map<std::string, DescriptorDataProvider>& dataProviders) override;
+	// *******************
+
+	/// Global descriptors
+	void CreateGlobalUniformBuffers(std::array<AllocatedBuffer, MAX_FRAMES_IN_FLIGHT>& buffers) override;
+	void CreateLightBuffer(AllocatedBuffer& outBuffer) override;
+	void CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& globalLayout, DescriptorSetLayoutInfo& lightLayout) override;
+	void AllocateGlobalDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, std::array<GenericHandle, MAX_FRAMES_IN_FLIGHT>& outDescriptorSets) override;
+	void AllocateLightDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, GenericHandle& outDescriptorSet) override;
+	// *******************
 
 	virtual void UpdateProjection(const glm::mat4& projection) override;
 	virtual void UpdateView(const glm::mat4& view) override;
 
 	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags bufferUsage, VmaMemoryUsage usage, VmaAllocationCreateFlags properties, VkBuffer& buffer, VmaAllocation& bufferMemory) const;
 
-	uint32_t GetOrCreateMaterialHandle(uint8_t pipeline, const TextureSetKey& key) override;
 	void CreateMeshVertexBuffer(const MeshData& meshData, MeshRenderData& outRenderData) override;
-	void CreateImageBuffer(const TextureData& textureData, void* pixels, TextureRenderData& outTextureRenderData) override;
+	void CreateTextureBuffer(const TextureData& textureData, void* pixels, TextureRenderData& renderData) override;
 
 	void DestroyBuffer(GenericHandle buffer, GenericHandle bufferMemory) override;
 	void DestroyMeshVertexBuffer(const MeshRenderData& renderData) override;
-	void DestroyTextureVertexBuffer(const TextureRenderData& renderData) override;
+	void DestroyTextureBuffer(const TextureRenderData& renderData) override;
 	void DestroyBuffer(VkBuffer buffer, VmaAllocation bufferMemory);
 
 protected:
-	void CreateBuiltInMaterials() override;
 	void HandleWindowResized() override;
 	void HandleWindowMinimized() override;
 
@@ -92,11 +95,7 @@ private:
 	bool CreateFrameBuffers();
 	bool CreateCommandPools();
 	bool CreateDescriptorPool();
-	void CreateRenderFrames();
-
-	void CreateSharedUniformBuffers();
-	void CreateGlobalDescriptorSetLayouts();
-	void CreateDescriptorSets();
+	void CreateRenderFrames();	
 	void CreateRenderPipelines();
 	void SetupDebugMessenger();
 
@@ -146,16 +145,16 @@ private:
 	std::vector<VkImage> swapChainImages;
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 
-	uint32_t currentFrame = 0;	
-	AllocatedImageBuffer depthImage;
-	AllocatedImageBuffer colorImage;
+	uint32_t currentFrame = 0;
+	AllocatedImage depthImage;
+	AllocatedImage colorImage;
 
 	std::unordered_map<EPipelineType, RenderPipeline*> renderPipelines;
 
 	std::vector<Frame> renderFrames;
 
-	std::vector<AllocatedBufferData> buffersPendingDelete;
-	std::vector<TextureRenderData> imagesPendingDelete;
+	std::vector<AllocatedBuffer> buffersPendingDelete;
+	std::vector<AllocatedImage> imagesPendingDelete;
 
 	std::vector<const char*> deviceExtensions =
 	{

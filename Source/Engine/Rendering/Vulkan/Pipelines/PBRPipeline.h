@@ -7,16 +7,13 @@
 class PBRPipeline : public RenderPipeline
 {
 public:
-	void DestroyPipeline() override;
-
-	void AllocateDescriptorSet(GenericHandle& outDescriptorSet) override;
-	void UpdateDescriptorSet(GenericHandle descriptorSet, const TextureSetKey& key) override;
+	EPipelineType GetType() const override { return EPipelineType::PBR; }
 
 protected:
+	void SetSpecializationConstants(VkPipelineShaderStageCreateInfo& vertexShader, VkPipelineShaderStageCreateInfo& fragmentShader) override;
 	void CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& vertexInputInfo) override;
 	void CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSetLayout>& outDescriptorSetLayouts) override;
-	std::string GetShaderPath() const override { return "Data/Engine/Shaders/Lit"; }
+	std::vector<VkPushConstantRange> GetPipelinePushConstants() override;
 
-private:
-	VkDescriptorSetLayout samplerSetLayout = VK_NULL_HANDLE;
+	std::string GetShaderPath() const override { return "Data/Engine/Shaders/PBR"; }
 };

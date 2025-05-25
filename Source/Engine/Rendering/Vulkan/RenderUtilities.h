@@ -38,6 +38,11 @@ public:
 		return reinterpret_cast<VkDescriptorSet>(std::get<uintptr_t>(handle));
 	}
 
+	static VkDescriptorSetLayout GenericHandleToDescriptorSetLayout(GenericHandle handle)
+	{
+		return reinterpret_cast<VkDescriptorSetLayout>(std::get<uintptr_t>(handle));
+	}
+
 	static GenericHandle BufferToGenericHandle(VkBuffer buffer)
 	{
 		return reinterpret_cast<uintptr_t>(buffer);
@@ -66,5 +71,10 @@ public:
 	static GenericHandle DescriptorSetToGenericHandle(VkDescriptorSet descriptorSet)
 	{
 		return reinterpret_cast<uintptr_t>(descriptorSet);
+	}
+
+	static GenericHandle DescriptorSetLayoutToGenericHandle(VkDescriptorSetLayout descriptorSetLayout)
+	{
+		return reinterpret_cast<uintptr_t>(descriptorSetLayout);
 	}
 };

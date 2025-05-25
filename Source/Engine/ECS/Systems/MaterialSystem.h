@@ -1,41 +1,23 @@
 #pragma once
 
-#include "AssetManager/LazyAssetPtr.h"
-#include "ECS/Components/MaterialComponent.h"
-#include "ECS/Entity.h"
-#include "EngineName.h"
-#include "SystemBase.h"
-#include "Utilities/Color.h"
+#include "Rendering/AbstractData.h"
+#include "Rendering/Material/Material.h"
 
-#include <glm/glm.hpp>
+#include <cstdint>
+#include <optional>
 #include <unordered_map>
 
-class Texture;
+struct Material;
 
-class MaterialSystem : public SystemBase
+class MaterialSystem
 {
 public:
-	static MaterialSystem& Get();
+	Material CreatePBRMaterial(std::optional<uint32_t> albedo = std::nullopt);
 
-	void UnInitialize() override;
-
-	void CreateComponent(const Entity& entity, uint8_t pipeline, LazyAssetPtr textures[], int32_t texturesCount, const Color& color = Color::white);
-
-	void RemoveComponent(const Entity& entity);
-
-	bool TryGetMaterialData(const Entity& entity, uint32_t& outMaterialHandle) const;
-
-	void SetColor(const Entity& entity, const Color& color);
+	bool TryGetMaterialInstance(uint32_t handle, MaterialInstance& outInstance) const;
 
 private:
-	void GetTextures(uint32_t componentID, std::vector<Texture*>& outTextures) const;
-
-	void Allocate(int32_t size) override;
-	void HandleEntityRemoved(const Entity& entity) override;
-	void DestroyComponent(uint32_t componentID) override;
-
-	MaterialComponent component;
-
-	std::unordered_map<Entity, uint32_t> instances;
-	std::unordered_multimap<uint32_t, LazyAssetPtr> cachedMultiTextures;
+	std::unordered_map<uint32_t, MaterialInstance> materialInstances;
+	std::unordered_map<MaterialInstanceKey, uint32_t> materialHandles;
+	uint32_t materialHandleTracker = 0;
 };

@@ -24,27 +24,29 @@ enum class EPipelineType : uint8_t
 	Debug
 };
 
-/// <summary>
-/// I'm abstracting this for both open GL and Vulkan
-/// One of the memory handles can be used for the vao on open GL
-/// </summary>
+struct AllocatedBuffer
+{
+	GenericHandle buffer;
+	GenericHandle memory;
+};
+
+struct AllocatedImage
+{
+	GenericHandle image;
+	GenericHandle view;
+	GenericHandle sampler;
+	GenericHandle memory;
+};
+
 struct MeshRenderData
 {
-	GenericHandle vertexBuffer;
-	GenericHandle indexBuffer;
-
-	GenericHandle vertexMemory;
-	GenericHandle indexMemory;
-
+	AllocatedBuffer vertex;
+	AllocatedBuffer index;
 	ERenderDataLoadState state = ERenderDataLoadState::Uninitialized;
 };
 
 struct TextureRenderData
 {
-	GenericHandle textureImage;
-	GenericHandle textureImageMemory;
-	GenericHandle imageView;
-	GenericHandle imageSampler;
-
+	AllocatedImage image;
 	ERenderDataLoadState state = ERenderDataLoadState::Uninitialized;
 };

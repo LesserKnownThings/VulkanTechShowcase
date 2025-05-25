@@ -16,15 +16,67 @@ void AssetManager::UnInitialize()
 	assets.clear();
 }
 
-void AssetManager::ManualImportAsset(const std::string& assetName, const std::string& assetPath)
+void AssetManager::AddAssetRef(uint32_t handle)
 {
-	assets.emplace(assetName, LazyAssetPtr{ AssetPath{assetPath} });
+	const std::string& name = nameRegistry.GetName(handle);
+	auto it = assets.find(name);
+	if (it != assets.end())
+	{
+		it->second.Increment();
+	}
+}
+
+void AssetManager::AddEngineAssetRef(uint32_t handle)
+{
+	const std::string& name = engineNameRegistry.GetName(handle);
+	auto it = engineAssets.find(name);
+	if (it != engineAssets.end())
+	{
+		it->second.Increment();
+	}
+}
+
+void AssetManager::ReleaseAsset(uint32_t handle)
+{
+	std::string name;
+	if ((handle & ENGINE_ASSET_FLAG) != 0)
+	{
+		if (engineNameRegistry.TryGetName(handle, name))
+		{
+			auto it = engineAssets.find(name);
+			if (it != engineAssets.end())
+			{
+				it->second.Decrement();
+			}
+		}
+	}
+	else
+	{
+		if (nameRegistry.TryGetName(handle, name))
+		{
+			auto it = assets.find(name);
+			if (it != assets.end())
+			{
+				it->second.Decrement();
+			}
+		}
+	}
 }
 
 void AssetManager::ImportAssets()
 {
-	const std::string importDirectory = "Data/Import";
+	static uint32_t handle = 0;
+	ImportAssets("Data/Import", assets, nameRegistry, handle);
+}
 
+void AssetManager::ImportEngineAssets()
+{
+	static uint32_t handle = 0;
+	ImportAssets("Data/Engine/Import", engineAssets, engineNameRegistry, handle, true);
+}
+
+void AssetManager::ImportAssets(const std::string& importDirectory, std::unordered_map<std::string, LazyAsset>& storage, AssetNameRegistry& registry, uint32_t& handle, bool isEngine)
+{
 	std::vector<fs::path> files;
 	FileHelper::GetFilesFromDirectory(importDirectory, files, {}, "", true);
 
@@ -38,7 +90,14 @@ void AssetManager::ImportAssets()
 			std::string assetPath = path.fullPath;
 			assetPath.erase(dirPos, importDirectory.size() + 1);
 			assetPath.erase(assetPath.size() - path.extension.size(), path.extension.size());
-			assets[assetPath] = LazyAssetPtr{ path };
+			storage.emplace(assetPath, LazyAsset{ path });
+
+			uint32_t currentHandle = handle++;
+			if (isEngine)
+			{
+				currentHandle |= ENGINE_ASSET_FLAG;
+			}
+			registry.Register(assetPath, currentHandle);
 		}
 	}
 }

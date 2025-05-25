@@ -1,4 +1,5 @@
 #include "RenderingInterface.h"
+#include "Descriptors/DescriptorRegistry.h"
 #include "Engine.h"
 #include "Input/InputSystem.h"
 #include "TaskManager.h"
@@ -33,6 +34,12 @@ void RenderingInterface::HandleWindowResized()
 	SDL_GetWindowSize(window, &width, &height);
 	aspectRatio = static_cast<float>(width) / static_cast<float>(height);
 	onWindowResizeParams.Invoke(static_cast<float>(width), static_cast<float>(height));
+}
+
+void RenderingInterface::CreateDescriptorRegistry()
+{
+	descriptorRegistry = new DescriptorRegistry(this);
+	descriptorRegistry->Initialize();
 }
 
 void RenderingInterface::RenderTasks()

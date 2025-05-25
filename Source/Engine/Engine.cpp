@@ -1,8 +1,6 @@
 #include "Engine.h"
 #include "AssetManager/AssetManager.h"
 #include "ECS/Systems/MaterialSystem.h"
-#include "ECS/Systems/MeshSystem.h"
-#include "ECS/Systems/TransformSystem.h"
 #include "Input/InputSystem.h"
 #include "Rendering/Vulkan/VulkanRendering.h"
 #include "SDLInterface.h"
@@ -30,11 +28,14 @@ bool Engine::Initialize()
 
 	inputSystem->onCloseAppDelegate.Bind(this, &Engine::HandleExit);
 
-	AssetManager::Get().ImportAssets();
+	AssetManager& assetManager = AssetManager::Get();
+	assetManager.ImportAssets();
+	assetManager.ImportEngineAssets();
+
 	InitializeECSSystems();
 
 	const bool success = sdlInterface->Initialize() &&
-		renderingInterface->Initialize();
+		renderingInterface->Initialize(960, 540);
 
 	if (success)
 	{
@@ -117,26 +118,12 @@ void Engine::Run()
 
 void Engine::InitializeECSSystems()
 {
-	MeshSystem* meshSystem = &MeshSystem::Get();
-	meshSystem->Initialize();
-	ecsSystems.push_back(meshSystem);
-
-	TransformSystem* transformSystem = &TransformSystem::Get();
-	transformSystem->Initialize();
-	ecsSystems.push_back(transformSystem);
-
-	MaterialSystem* materialSystem = &MaterialSystem::Get();
-	materialSystem->Initialize();
-	ecsSystems.push_back(materialSystem);
+	materialSystem = new MaterialSystem();
 }
 
 void Engine::UnInitializeECSSystems()
 {
-	for (SystemBase* system : ecsSystems)
-	{
-		system->UnInitialize();
-	}
-	ecsSystems.clear();
+	delete materialSystem;
 }
 
 void Engine::HandleExit()

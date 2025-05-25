@@ -16,7 +16,7 @@ bool ImageImporter::ImportTexture(const std::string& path, TextureData& outData,
 	{
 		outData.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
 		RenderingInterface* renderingInterface = GameEngine->GetRenderingSystem();
-		renderingInterface->CreateImageBuffer(outData, pixels, outTextureRenderData);
+		renderingInterface->CreateTextureBuffer(outData, pixels, outTextureRenderData);
 		return true;
 	}
 	return false;

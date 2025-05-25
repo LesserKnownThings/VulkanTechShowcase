@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ECS/Entity.h"
-
+#include <entt/entt.hpp>
+#include <unordered_map>
 #include <vector>
 
 class Camera;
@@ -14,9 +14,10 @@ public:
 
 protected:
 	virtual void Draw();
-	virtual void Tick(float deltaTime);	
-
-	std::vector<Entity> entities;
+	virtual void Tick(float deltaTime);
 
 	Camera* camera = nullptr;
+
+	entt::registry registry;
 };
+

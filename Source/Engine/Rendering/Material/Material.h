@@ -1,35 +1,82 @@
 #pragma once
 
 #include "Rendering/AbstractData.h"
+#include "Rendering/Descriptors/DescriptorInfo.h"
 
+#include <cstdint>
+#include <glm/glm.hpp>
 #include <vector>
 
-struct TextureSetKey
+template <typename T>
+inline void HashCombine(std::size_t& seed, const T& v)
 {
-	std::vector<GenericHandle> views;
-	std::vector<GenericHandle> samplers;
+	std::hash<T> hasher;
+	seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
 
-	bool operator==(const TextureSetKey&) const = default;
-};
-
-struct TextureSetKeyHash
+struct MaterialDescriptorBindingResource
 {
-	size_t operator()(const TextureSetKey& key) const noexcept
+	std::string semantic;
+	uint32_t imageHandle;
+
+	bool operator==(const MaterialDescriptorBindingResource& other) const
 	{
-		uint64_t h = 14695981039346656037ull;
-		for (int32_t i = 0; i < key.views.size(); ++i)
-		{
-			h = (h ^ std::get<uintptr_t>(key.views[i])) * 1099511628211ull;
-			h = (h ^ std::get<uintptr_t>(key.samplers[i])) * 1099511628211ull;
-		}
-		return static_cast<size_t>(h);
+		return semantic == other.semantic &&
+			imageHandle == other.imageHandle;
 	}
 };
 
-struct Material
+template <>
+struct std::hash<MaterialDescriptorBindingResource>
+{
+	std::size_t operator()(const MaterialDescriptorBindingResource& resource) const noexcept
+	{
+		std::size_t seed = 0;
+		HashCombine(seed, resource.semantic);
+		HashCombine(seed, resource.imageHandle);
+		return seed;
+	}
+};
+
+struct MaterialInstanceKey
 {
 	EPipelineType pipeline;
-	ERenderDataLoadState state;
+	std::vector<MaterialDescriptorBindingResource> resources;
+
+	mutable std::size_t cachedHash = 0;
+
+	bool operator==(const MaterialInstanceKey& other) const
+	{
+		return pipeline == other.pipeline && resources == other.resources;
+	}
+
+	std::size_t GetHash() const
+	{
+		if (cachedHash == 0)
+		{
+			std::size_t seed = 0;
+			HashCombine(seed, static_cast<std::underlying_type_t<EPipelineType>>(pipeline));
+			for (const auto& resource : resources) {
+				HashCombine(seed, resource);
+			}
+			cachedHash = seed;
+		}
+		return cachedHash;
+	}
+};
+
+template <>
+struct std::hash<MaterialInstanceKey>
+{
+	std::size_t operator()(const MaterialInstanceKey& key) const noexcept
+	{
+		return key.GetHash();
+	}
+};
+
+struct MaterialInstance
+{
+	MaterialInstanceKey key;
 	GenericHandle descriptorSet;
-	TextureSetKey materialSlots;
+	ERenderDataLoadState state;
 };

@@ -1,43 +1,43 @@
 #include "World.h"
+#include "AssetManager/AssetManager.h"
 #include "Camera/Camera.h"
 #include "Engine.h"
 #include "Rendering/AbstractData.h"
 #include "Rendering/RenderingInterface.h"
 #include "TaskManager.h"
-
-#include "AssetManager/AssetManager.h"
-#include "AssetManager/LazyAssetPtr.h"
-#include "AssetManager/Model/Model.h"
-#include "AssetManager/Texture/Texture.h"
-#include "ECS/EntityManager.h"
+#include "ECS/Components/Components.h"
 #include "ECS/Systems/MaterialSystem.h"
-#include "ECS/Systems/MeshSystem.h"
-#include "ECS/Systems/TransformSystem.h"
+
 
 void World::Initialize()
 {
-	camera = new Camera(glm::vec3(0.0f, 1.5f, 3.5f));
+	camera = new Camera(glm::vec3(0.0f, 60.0f, 500.0f));
 	TaskManager::Get().RegisterTask(this, &World::Tick, TICK_HANDLE);
 	TaskManager::Get().RegisterTask(this, &World::Draw, RENDER_HANDLE);
 
-	Entity entity = EntityManager::Get().CreateEntity();
+	entt::entity entity = registry.create();
 
-	LazyAssetPtr assets[2];
-	AssetManager::Get().QueryAssets<Texture, Model>(assets, "Textures\\viking_room", "Meshes\\viking_room");
+	uint32_t handles[2];
+	AssetManager::Get().QueryAssets(handles, "Meshes\\Demon", "Textures\\Polygon2");
 
-	if (assets[0].IsValid() && assets[1].IsValid())
-	{
-		MaterialSystem::Get().CreateComponent(entity, static_cast<uint8_t>(EPipelineType::PBR), assets, 1);
-		MeshSystem::Get().CreateComponent(entity, assets[1]);
-	}
+	Material material = GameEngine->GetMaterialSystem()->CreatePBRMaterial(handles[1]);
 
-	TransformSystem::Get().CreateComponent(entity, true, glm::vec3(0.0f), glm::vec3(-90.0f, 0.0f, -135.0f), glm::vec3(2.0f));
-	entities.push_back(entity);
+	registry.emplace<Transform>(entity, Transform{});
+	registry.emplace<Mesh>(entity, Mesh{ handles[0] });
+	registry.emplace<Material>(entity, material);
 }
 
 void World::UnInitialize()
 {
 	TaskManager::Get().RemoveAllTasks(this);
+
+	auto view = registry.view<Mesh, Material>();
+	// TODO release resources when world is destroyed
+	view.each([](entt::entity entity, const Mesh& mesh, const Material& material)
+		{
+
+		});
+
 	delete camera;
 }
 
@@ -46,13 +46,17 @@ void World::Draw()
 	RenderingInterface* renderingInterface = GameEngine->GetRenderingSystem();
 	renderingInterface->UpdateView(camera->GetView());
 
-	for (const Entity& entity : entities)
-	{
-		renderingInterface->DrawSingle(entity);
-	}
+	auto view = registry.view<const Transform, const Mesh, const Material>();
+	std::vector<entt::entity> entities;
+	view.each([&](const auto entity, const Transform& transform, const Mesh& mesh, const Material& material)
+		{
+			entities.push_back(entity);
+		});
+
+	GameEngine->GetRenderingSystem()->DrawSingle(entities, registry);
 }
 
 void World::Tick(float deltaTime)
 {
-	//TransformSystem::Get().Rotate(entities[0], 100.0f * deltaTime, glm::vec3(0.0f, 0.0f, -1.0f));
+
 }

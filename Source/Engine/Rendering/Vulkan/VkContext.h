@@ -4,12 +4,6 @@
 #include <volk.h>
 #include <vma/vk_mem_alloc.h>
 
-struct AllocatedBufferData
-{
-	VkBuffer buffer = VK_NULL_HANDLE;
-	VmaAllocation memory = VK_NULL_HANDLE;
-};
-
 struct QueueFamilyIndices
 {
 	std::optional<uint32_t> graphicsFamily;
@@ -38,7 +32,7 @@ struct VkContext
 	VkQueue transferQueue = VK_NULL_HANDLE;
 	VkCommandPool graphicsCommandPool = VK_NULL_HANDLE;
 	VkCommandPool transferCommandPool = VK_NULL_HANDLE;
-		
+
 	VkExtent2D swapChainExtent;
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
 	VkSwapchainKHR swapChain = VK_NULL_HANDLE;
@@ -50,7 +44,4 @@ struct VkContext
 
 	VmaAllocator allocator = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
-
-	// Global Descriptor Layout Handles
-	VkDescriptorSetLayout globalDescriptorSetLayout = VK_NULL_HANDLE;
 };

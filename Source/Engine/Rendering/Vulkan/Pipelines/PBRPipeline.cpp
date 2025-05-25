@@ -1,57 +1,45 @@
 #include "PBRPipeline.h"
 #include "AssetManager/Model/MeshData.h"
-#include "AssetManager/Texture/Texture.h"
+#include "Rendering/Descriptors/DescriptorRegistry.h"
+#include "Rendering/Light/Light.h"
 #include "Rendering/RenderingInterface.h"
+#include "Rendering/Vulkan/PushConstant.h"
 #include "Rendering/Vulkan/RenderUtilities.h"
 
+#include <cstdint>
 #include <iostream>
 
-void PBRPipeline::DestroyPipeline()
+void PBRPipeline::SetSpecializationConstants(VkPipelineShaderStageCreateInfo& vertexShader, VkPipelineShaderStageCreateInfo& fragmentShader)
 {
-	vkDestroyDescriptorSetLayout(context.device, samplerSetLayout, nullptr);
-	RenderPipeline::DestroyPipeline();
+	VkSpecializationMapEntry entry = {
+	.constantID = 0,
+	.offset = 0,
+	.size = sizeof(MAX_LIGHTS)
+	};
+
+	VkSpecializationInfo specInfo = {};
+	specInfo.mapEntryCount = 1;
+	specInfo.pMapEntries = &entry;
+	specInfo.dataSize = sizeof(uint32_t);
+	specInfo.pData = &MAX_LIGHTS;
+
+	fragmentShader.pSpecializationInfo = &specInfo;
 }
 
-void PBRPipeline::AllocateDescriptorSet(GenericHandle& outDescriptorSet)
+std::vector<VkPushConstantRange> PBRPipeline::GetPipelinePushConstants()
 {
-	VkDescriptorSetAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.descriptorPool = context.descriptorPool;
-	allocInfo.descriptorSetCount = 1;
-	allocInfo.pSetLayouts = &samplerSetLayout;
+	std::vector<VkPushConstantRange> pushConstants(2);
 
-	VkDescriptorSet descriptorSet;
-	if (vkAllocateDescriptorSets(context.device, &allocInfo, &descriptorSet) != VK_SUCCESS)
-	{
-		std::cerr << "Failed to allocate global descriptor sets!" << std::endl;
-	}
+	pushConstants[0].offset = 0;
+	pushConstants[0].size = sizeof(SingleEntityConstant);
+	pushConstants[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-	outDescriptorSet = RenderUtilities::DescriptorSetToGenericHandle(descriptorSet);
-}
 
-void PBRPipeline::UpdateDescriptorSet(GenericHandle descriptorSet, const TextureSetKey& key)
-{
-	const int32_t descriptorsCount = key.views.size();
+	pushConstants[1].offset = sizeof(SingleEntityConstant);
+	pushConstants[1].size = sizeof(LightConstant);
+	pushConstants[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	VkWriteDescriptorSet* descriptorWrites = new VkWriteDescriptorSet[descriptorsCount]{};
-	for (int32_t i = 0; i < descriptorsCount; ++i)
-	{
-		VkDescriptorImageInfo imageInfo{};
-		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageInfo.imageView = RenderUtilities::GenericHandleToImageView(key.views[i]);
-		imageInfo.sampler = RenderUtilities::GenericHandleToImageSampler(key.samplers[i]);
-
-		descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[i].dstSet = RenderUtilities::GenericHandleToDescriptorSet(descriptorSet);
-		descriptorWrites[i].dstBinding = i;
-		descriptorWrites[i].dstArrayElement = 0;
-		descriptorWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descriptorWrites[i].descriptorCount = 1;
-		descriptorWrites[i].pImageInfo = &imageInfo;
-	}
-
-	vkUpdateDescriptorSets(context.device, descriptorsCount, descriptorWrites, 0, nullptr);
-	delete[] descriptorWrites;
+	return pushConstants;
 }
 
 void PBRPipeline::CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& vertexInputInfo)
@@ -97,41 +85,49 @@ void PBRPipeline::CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& ve
 
 void PBRPipeline::CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSetLayout>& outDescriptorSetLayouts)
 {
-	const uint32_t bindingCount = 4;
-	VkDescriptorSetLayoutBinding* uboLayoutBinding = new VkDescriptorSetLayoutBinding[bindingCount];
+	// The order in which the layouts are pushed matters
+
+	if (const DescriptorRegistry* registry = renderingInterface->GetDescriptorRegistry())
+	{
+		VkDescriptorSetLayout globalLayout = RenderUtilities::GenericHandleToDescriptorSetLayout(registry->GetGlobalLayout().layout);
+		VkDescriptorSetLayout lightLayout = RenderUtilities::GenericHandleToDescriptorSetLayout(registry->GetLightLayout().layout);
+
+		outDescriptorSetLayouts.push_back(globalLayout);
+		outDescriptorSetLayouts.push_back(lightLayout);
+
+	}
+
+	std::array<VkDescriptorSetLayoutBinding, 1> uboLayoutBinding = {};
+
+	// Albedo
 	uboLayoutBinding[0].binding = 0;
 	uboLayoutBinding[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	uboLayoutBinding[0].descriptorCount = 1;
 	uboLayoutBinding[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 	uboLayoutBinding[0].pImmutableSamplers = nullptr;
-
-	uboLayoutBinding[1].binding = 1;
-	uboLayoutBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	uboLayoutBinding[1].descriptorCount = 1;
-	uboLayoutBinding[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	uboLayoutBinding[1].pImmutableSamplers = nullptr;
-
-	uboLayoutBinding[2].binding = 2;
-	uboLayoutBinding[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	uboLayoutBinding[2].descriptorCount = 1;
-	uboLayoutBinding[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	uboLayoutBinding[2].pImmutableSamplers = nullptr;
-
-	uboLayoutBinding[3].binding = 3;
-	uboLayoutBinding[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	uboLayoutBinding[3].descriptorCount = 1;
-	uboLayoutBinding[3].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	uboLayoutBinding[3].pImmutableSamplers = nullptr;
+	descriptorBindings.emplace_back(DescriptorBindingInfo
+		{
+			EDescriptorOwner::Material, 0, 0,
+			static_cast<uint32_t>(uboLayoutBinding[0].descriptorType),
+			static_cast<uint32_t>(uboLayoutBinding[0].stageFlags),
+			"albedo"
+		});
 
 	VkDescriptorSetLayoutCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	createInfo.bindingCount = bindingCount;
-	createInfo.pBindings = uboLayoutBinding;
+	createInfo.bindingCount = uboLayoutBinding.size();
+	createInfo.pBindings = uboLayoutBinding.data();
 
-	if (vkCreateDescriptorSetLayout(context.device, &createInfo, nullptr, &samplerSetLayout) != VK_SUCCESS)
+	VkDescriptorSetLayout samplerLayout;
+	if (vkCreateDescriptorSetLayout(context.device, &createInfo, nullptr, &samplerLayout) != VK_SUCCESS)
 	{
 		std::cerr << "Failed to create descriptor set layout for samplers!" << std::endl;
 	}
-
-	outDescriptorSetLayouts.push_back(samplerSetLayout);
+	outDescriptorSetLayouts.push_back(samplerLayout);
+	materialLayout = DescriptorSetLayoutInfo
+	{
+		RenderUtilities::DescriptorSetLayoutToGenericHandle(samplerLayout),
+		2,
+		EDescriptorOwner::Material
+	};
 }

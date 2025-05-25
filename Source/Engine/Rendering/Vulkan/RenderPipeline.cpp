@@ -4,15 +4,17 @@
 #include "Rendering/Vulkan/RenderUtilities.h"
 #include "Utilities/FileHelper.h"
 
+#include <array>
 #include <iostream>
 #include <filesystem>
 #include <volk.h>
 
 namespace fs = std::filesystem;
 
-void RenderPipeline::Initialize(const VkContext& inContext)
+void RenderPipeline::Initialize(const VkContext& inContext, RenderingInterface* inRenderingInterface)
 {
 	context = inContext;
+	renderingInterface = inRenderingInterface;
 
 	const std::string shaderPath = GetShaderPath();
 
@@ -39,6 +41,8 @@ void RenderPipeline::Initialize(const VkContext& inContext)
 	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	fragShaderStageInfo.module = fragShaderModule;
 	fragShaderStageInfo.pName = "main";
+
+	SetSpecializationConstants(vertShaderStageInfo, fragShaderStageInfo);
 
 	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
@@ -127,23 +131,15 @@ void RenderPipeline::Initialize(const VkContext& inContext)
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 
 	// Global layouts added first and the pipeline specific layouts will be added later
-	std::vector<VkDescriptorSetLayout> descriptorSetLayouts =
-	{
-		context.globalDescriptorSetLayout
-	};
-
+	std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
 	CreatePipelineDescriptorLayoutSets(descriptorSetLayouts);
+	std::vector<VkPushConstantRange> pushConstants = GetPipelinePushConstants();
 
-	VkPushConstantRange pushConstant{};
-	pushConstant.offset = 0;
-	pushConstant.size = sizeof(SingleEntityConstant);
-	pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	pipelineLayoutInfo.pPushConstantRanges = pushConstants.data();
+	pipelineLayoutInfo.pushConstantRangeCount = pushConstants.size();
 
 	pipelineLayoutInfo.setLayoutCount = descriptorSetLayouts.size();
 	pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
-
-	pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
-	pipelineLayoutInfo.pushConstantRangeCount = 1;
 
 	if (vkCreatePipelineLayout(context.device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
 	{
@@ -194,8 +190,16 @@ void RenderPipeline::Initialize(const VkContext& inContext)
 
 void RenderPipeline::DestroyPipeline()
 {
+	VkDescriptorSetLayout layout = RenderUtilities::GenericHandleToDescriptorSetLayout(materialLayout.layout);
+	vkDestroyDescriptorSetLayout(context.device, layout, nullptr);
+
 	vkDestroyPipeline(context.device, graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(context.device, pipelineLayout, nullptr);
+}
+
+void RenderPipeline::Bind(VkCommandBuffer cmdBuffer)
+{
+	vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 }
 
 VkShaderModule RenderPipeline::CreateShaderModule(const std::vector<char>& code)
@@ -212,4 +216,66 @@ VkShaderModule RenderPipeline::CreateShaderModule(const std::vector<char>& code)
 	}
 
 	return shaderModule;
+}
+
+void RenderPipeline::AllocateMaterialDescriptorSet(GenericHandle& outDescriptorSet)
+{
+	VkDescriptorSetLayout layout = RenderUtilities::GenericHandleToDescriptorSetLayout(materialLayout.layout);
+
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = context.descriptorPool;
+	allocInfo.descriptorSetCount = 1;
+	allocInfo.pSetLayouts = &layout;
+
+	VkDescriptorSet set;
+	if (vkAllocateDescriptorSets(context.device, &allocInfo, &set) != VK_SUCCESS)
+	{
+		std::cerr << "Failed to allocate descriptor set!" << std::endl;
+	}
+
+	outDescriptorSet = RenderUtilities::DescriptorSetToGenericHandle(set);
+}
+
+void RenderPipeline::UpdateMaterialDescriptorSet(const std::unordered_map<std::string, DescriptorDataProvider>& dataProviders)
+{
+	std::vector<VkWriteDescriptorSet> writes;
+
+	for (const DescriptorBindingInfo& layoutInfo : descriptorBindings)
+	{
+		auto it = dataProviders.find(layoutInfo.semantic);
+		if (it != dataProviders.end())
+		{
+			const DescriptorDataProvider& provider = it->second;
+
+			VkDescriptorImageInfo imageInfo{};
+			if (provider.providerType == EDescriptorDataProviderType::Image || provider.providerType == EDescriptorDataProviderType::All)
+			{
+				imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				imageInfo.imageView = RenderUtilities::GenericHandleToImageView(provider.image.view);
+				imageInfo.sampler = RenderUtilities::GenericHandleToImageSampler(provider.image.sampler);
+			}
+
+			VkDescriptorBufferInfo bufferInfo{};
+			if (provider.providerType == EDescriptorDataProviderType::Buffer || provider.providerType == EDescriptorDataProviderType::All)
+			{
+				bufferInfo.buffer = RenderUtilities::GenericHandleToBuffer(provider.dataProviderBuffer.buffer.buffer);
+				bufferInfo.offset = provider.dataProviderBuffer.offset;
+				bufferInfo.range = provider.dataProviderBuffer.range;
+			}
+
+			VkWriteDescriptorSet write{};
+			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			write.dstSet = RenderUtilities::GenericHandleToDescriptorSet(provider.descriptorSet);
+			write.dstBinding = layoutInfo.binding;
+			write.dstArrayElement = 0;
+			write.descriptorType = static_cast<VkDescriptorType>(layoutInfo.type);
+			write.descriptorCount = 1;
+			write.pImageInfo = &imageInfo;
+			write.pBufferInfo = &bufferInfo;
+			writes.push_back(write);
+		}
+	}
+
+	vkUpdateDescriptorSets(context.device, writes.size(), writes.data(), 0, nullptr);
 }

@@ -9,6 +9,7 @@
     "volk",
     "assimp",
     "glm",
-    "stb"
+    "stb",
+    "entt"
   ]
 }

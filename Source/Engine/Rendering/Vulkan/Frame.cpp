@@ -37,11 +37,4 @@ void Frame::Destroy(const VkContext& context)
 	vkDestroySemaphore(context.device, imageAvailableSemaphore, nullptr);
 	vkDestroySemaphore(context.device, renderFinishedSemaphore, nullptr);
 	vkDestroyFence(context.device, inFlightFence, nullptr);
-
-	for (const auto& it : globalUniforms)
-	{
-		const AllocatedBufferData& data = it.second;
-
-		vmaDestroyBuffer(context.allocator, data.buffer, data.memory);
-	}
 }

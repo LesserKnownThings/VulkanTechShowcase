@@ -16,6 +16,7 @@ find_package(sdl3 CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(volk CONFIG REQUIRED)
+find_package(entt CONFIG REQUIRED)
 ##########################
 
 add_executable(VulkanTechShowcase ${GLOBAL_SOURCES})
@@ -27,6 +28,7 @@ target_link_libraries(VulkanTechShowcase
         assimp::assimp
         Vulkan::Vulkan
         volk::volk
+        EnTT::EnTT
 )
 
 find_path(VULKAN_MEMORY_ALLOCATOR_INCLUDE_DIRS "vma/vk_mem_alloc.h")

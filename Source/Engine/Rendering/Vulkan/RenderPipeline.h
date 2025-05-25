@@ -1,6 +1,6 @@
 #pragma once
 
-#include "EngineName.h"
+#include "Rendering/Descriptors/DescriptorInfo.h"
 #include "Rendering/Material/Material.h"
 #include "VkContext.h"
 
@@ -10,24 +10,40 @@
 #include <vector>
 #include <volk.h>
 
+class IDescriptorDataProvider;
+class RenderingInterface;
 class Texture;
+
+struct DescriptorSetBlock;
 
 class RenderPipeline
 {
 public:
-	virtual void Initialize(const VkContext& inContext);
+	void Initialize(const VkContext& inContext, RenderingInterface* inRenderingInterface);
+
 	virtual void DestroyPipeline();
 
-	virtual void AllocateDescriptorSet(GenericHandle& outDescriptorSet) = 0;
-	virtual void UpdateDescriptorSet(GenericHandle descriptorSet, const TextureSetKey& key) = 0;
+	void Bind(VkCommandBuffer cmdBuffer);
+
+	// TODO specialized descriptor sets (like compute shader buffers)
+
+	virtual void AllocateMaterialDescriptorSet(GenericHandle& outDescriptorSet);
+	virtual void UpdateMaterialDescriptorSet(const std::unordered_map<std::string, DescriptorDataProvider>& dataProviders);
+
+	virtual EPipelineType GetType() const = 0;
 
 	VkPipeline GetPipeline() const { return graphicsPipeline; }
 	VkPipelineLayout GetLayout() const { return pipelineLayout; }
 	const std::string& GetName() const { return name; }
 
+	const DescriptorSetLayoutInfo& GetMaterialLayout() const { return materialLayout; }
+
 protected:
+	virtual void SetSpecializationConstants(VkPipelineShaderStageCreateInfo& vertexShader, VkPipelineShaderStageCreateInfo& fragmentShader) = 0;
 	virtual void CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& vertexInputInfo) = 0;
 	virtual void CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSetLayout>& outDescriptorSetLayouts) = 0;
+	virtual std::vector<VkPushConstantRange> GetPipelinePushConstants() = 0;
+
 	virtual std::string GetShaderPath() const = 0;
 
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
@@ -36,9 +52,13 @@ protected:
 	std::string name;
 
 	VkContext context;
+	RenderingInterface* renderingInterface = nullptr;
 
 	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
+
+	DescriptorSetLayoutInfo materialLayout;
+	std::vector<DescriptorBindingInfo> descriptorBindings;
 
 	std::vector<VkDynamicState> dynamicStates =
 	{
