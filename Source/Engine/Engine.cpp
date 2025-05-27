@@ -1,6 +1,5 @@
 #include "Engine.h"
 #include "AssetManager/AssetManager.h"
-#include "ECS/Systems/MaterialSystem.h"
 #include "Input/InputSystem.h"
 #include "Rendering/Vulkan/VulkanRendering.h"
 #include "SDLInterface.h"
@@ -8,6 +7,11 @@
 #include "World/World.h"
 
 #include <SDL3/SDL.h>
+
+// How much MS for each FPS
+constexpr uint32_t FPS_30 = 33;
+constexpr uint32_t FPS_60 = 16;
+constexpr uint32_t FPS_120 = 8;
 
 Engine* Engine::instance = nullptr;
 Engine* Engine::Get()
@@ -67,7 +71,6 @@ void Engine::Run()
 {
 	isRunning = true;
 
-	constexpr int32_t FRAME_RATE = 16; // 60 fps
 	constexpr float MAX_DELTA = .016f;
 	constexpr float GC_PASS_DELAY = 2.5f;
 
@@ -109,21 +112,22 @@ void Engine::Run()
 			TaskManager::Get().ExecuteTasks(GC_HANDLE);
 		}
 
-		if (FRAME_RATE > frameDuration)
+		// TODO move this to an arg or settings
+		if (FPS_120 > frameDuration)
 		{
-			SDL_Delay(FRAME_RATE);
+			SDL_Delay(FPS_120);
 		}
 	}
 }
 
 void Engine::InitializeECSSystems()
 {
-	materialSystem = new MaterialSystem();
+
 }
 
 void Engine::UnInitializeECSSystems()
 {
-	delete materialSystem;
+
 }
 
 void Engine::HandleExit()

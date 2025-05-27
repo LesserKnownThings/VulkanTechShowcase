@@ -59,20 +59,21 @@ public:
 	void CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& globalLayout, DescriptorSetLayoutInfo& lightLayout) override;
 	void AllocateGlobalDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, std::array<GenericHandle, MAX_FRAMES_IN_FLIGHT>& outDescriptorSets) override;
 	void AllocateLightDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, GenericHandle& outDescriptorSet) override;
+	void DestroyDescriptorSetLayout(const DescriptorSetLayoutInfo& layoutInfo) override;
 	// *******************
 
 	virtual void UpdateProjection(const glm::mat4& projection) override;
 	virtual void UpdateView(const glm::mat4& view) override;
 
-	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags bufferUsage, VmaMemoryUsage usage, VmaAllocationCreateFlags properties, VkBuffer& buffer, VmaAllocation& bufferMemory) const;
-
+	// Buffer manips
 	void CreateMeshVertexBuffer(const MeshData& meshData, MeshRenderData& outRenderData) override;
 	void CreateTextureBuffer(const TextureData& textureData, void* pixels, TextureRenderData& renderData) override;
 
-	void DestroyBuffer(GenericHandle buffer, GenericHandle bufferMemory) override;
-	void DestroyMeshVertexBuffer(const MeshRenderData& renderData) override;
-	void DestroyTextureBuffer(const TextureRenderData& renderData) override;
-	void DestroyBuffer(VkBuffer buffer, VmaAllocation bufferMemory);
+	void UpdateBuffer(AllocatedBuffer buffer, uint32_t offset, uint32_t range, void* dataToCopy) override;
+
+	void DestroyBuffer(AllocatedBuffer buffer) override;
+	void DestroyTexture(AllocatedTexture texture) override;
+	// ************
 
 protected:
 	void HandleWindowResized() override;
@@ -95,7 +96,7 @@ private:
 	bool CreateFrameBuffers();
 	bool CreateCommandPools();
 	bool CreateDescriptorPool();
-	void CreateRenderFrames();	
+	void CreateRenderFrames();
 	void CreateRenderPipelines();
 	void SetupDebugMessenger();
 
@@ -117,9 +118,11 @@ private:
 
 	// Helper functions
 	void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaAllocationCreateFlags memoryFlags, VkImage& outImage, VmaAllocation& outMemory);
+
 	VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 	void TransitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 
+	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags bufferUsage, VmaMemoryUsage usage, VmaAllocationCreateFlags properties, VkBuffer& buffer, VmaAllocation& bufferMemory) const;
 	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, VkDeviceSize srcoffset, VkDeviceSize dstOffset);
 
 	void CopyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
@@ -146,15 +149,15 @@ private:
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 
 	uint32_t currentFrame = 0;
-	AllocatedImage depthImage;
-	AllocatedImage colorImage;
+	AllocatedTexture depthImage;
+	AllocatedTexture colorImage;
 
 	std::unordered_map<EPipelineType, RenderPipeline*> renderPipelines;
 
 	std::vector<Frame> renderFrames;
 
 	std::vector<AllocatedBuffer> buffersPendingDelete;
-	std::vector<AllocatedImage> imagesPendingDelete;
+	std::vector<AllocatedTexture> imagesPendingDelete;
 
 	std::vector<const char*> deviceExtensions =
 	{

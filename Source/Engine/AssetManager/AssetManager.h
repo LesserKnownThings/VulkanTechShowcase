@@ -126,10 +126,21 @@ inline void AssetManager::QueryEngineAssets(uint32_t assetHandles[], Keys ...key
 template<typename T>
 inline T* AssetManager::LoadAsset(uint32_t handle)
 {
-	auto it = assets.find(nameRegistry.GetName(handle));
-	if (it != assets.end())
+	if ((handle & ENGINE_ASSET_FLAG) != 0)
 	{
-		return it->second.Get<T>();
+		auto it = engineAssets.find(engineNameRegistry.GetName(handle));
+		if (it != engineAssets.end())
+		{
+			return it->second.Get<T>();
+		}
+	}
+	else
+	{
+		auto it = assets.find(nameRegistry.GetName(handle));
+		if (it != assets.end())
+		{
+			return it->second.Get<T>();
+		}
 	}
 
 	return nullptr;

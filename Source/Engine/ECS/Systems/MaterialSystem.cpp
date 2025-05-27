@@ -9,6 +9,17 @@
 
 #include <glm/glm.hpp>
 
+void MaterialSystem::ReleaseResources()
+{
+	for (const auto& it : materialInstances)
+	{
+		for (const MaterialDescriptorBindingResource& resource : it.second.key.resources)
+		{
+			AssetManager::Get().ReleaseAsset(resource.textureAssetHandle);
+		}
+	}
+}
+
 Material MaterialSystem::CreatePBRMaterial(std::optional<uint32_t> albedo)
 {
 	AssetManager& assetManager = AssetManager::Get();
@@ -53,8 +64,8 @@ Material MaterialSystem::CreatePBRMaterial(std::optional<uint32_t> albedo)
 	DescriptorDataProvider albedoProvider{};
 	// TODO maybe have a better way to set the descriptor set index?
 	albedoProvider.descriptorSet = instance.descriptorSet;
-	albedoProvider.providerType = EDescriptorDataProviderType::Image;
-	albedoProvider.image = renderData.image;
+	albedoProvider.providerType = EDescriptorDataProviderType::Texture;
+	albedoProvider.texture = renderData.texture;
 
 	std::unordered_map<std::string, DescriptorDataProvider> providers =
 	{

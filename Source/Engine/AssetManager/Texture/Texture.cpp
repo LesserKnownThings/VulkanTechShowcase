@@ -11,5 +11,5 @@ bool Texture::LoadAsset(const std::string& path)
 
 void Texture::UnloadAsset()
 {
-	GameEngine->GetRenderingSystem()->DestroyTextureBuffer(renderData);
+	GameEngine->GetRenderingSystem()->DestroyTexture(renderData.texture);
 }

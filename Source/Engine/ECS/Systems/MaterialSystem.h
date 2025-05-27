@@ -12,6 +12,8 @@ struct Material;
 class MaterialSystem
 {
 public:
+	void ReleaseResources();
+
 	Material CreatePBRMaterial(std::optional<uint32_t> albedo = std::nullopt);
 
 	bool TryGetMaterialInstance(uint32_t handle, MaterialInstance& outInstance) const;

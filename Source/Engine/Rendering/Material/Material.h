@@ -17,12 +17,12 @@ inline void HashCombine(std::size_t& seed, const T& v)
 struct MaterialDescriptorBindingResource
 {
 	std::string semantic;
-	uint32_t imageHandle;
+	uint32_t textureAssetHandle;
 
 	bool operator==(const MaterialDescriptorBindingResource& other) const
 	{
 		return semantic == other.semantic &&
-			imageHandle == other.imageHandle;
+			textureAssetHandle == other.textureAssetHandle;
 	}
 };
 
@@ -33,7 +33,7 @@ struct std::hash<MaterialDescriptorBindingResource>
 	{
 		std::size_t seed = 0;
 		HashCombine(seed, resource.semantic);
-		HashCombine(seed, resource.imageHandle);
+		HashCombine(seed, resource.textureAssetHandle);
 		return seed;
 	}
 };

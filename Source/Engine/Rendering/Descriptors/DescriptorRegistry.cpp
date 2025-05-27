@@ -20,5 +20,13 @@ void DescriptorRegistry::Initialize()
 
 void DescriptorRegistry::UnInitialize()
 {
-	// TODO
+	renderingInterface->DestroyBuffer(lightBuffer);
+
+	for (const AllocatedBuffer& buffer : matricesBuffers)
+	{
+		renderingInterface->DestroyBuffer(buffer);
+	}
+
+	renderingInterface->DestroyDescriptorSetLayout(lightLayout);
+	renderingInterface->DestroyDescriptorSetLayout(globalLayout);
 }

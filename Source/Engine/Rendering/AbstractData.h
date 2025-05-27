@@ -30,7 +30,7 @@ struct AllocatedBuffer
 	GenericHandle memory;
 };
 
-struct AllocatedImage
+struct AllocatedTexture
 {
 	GenericHandle image;
 	GenericHandle view;
@@ -47,6 +47,6 @@ struct MeshRenderData
 
 struct TextureRenderData
 {
-	AllocatedImage image;
+	AllocatedTexture texture;
 	ERenderDataLoadState state = ERenderDataLoadState::Uninitialized;
 };

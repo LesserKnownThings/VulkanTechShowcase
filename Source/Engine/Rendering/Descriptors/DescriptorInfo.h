@@ -7,6 +7,9 @@
 #include <string>
 #include <unordered_map>
 
+constexpr uint32_t MATRICES_DESCRIPTOR_FLAG = 1 << 0;
+constexpr uint32_t LIGHT_DESCRIPTOR_FLAG = 1 << 1;
+
 enum class EDescriptorOwner : uint8_t
 {
 	None,
@@ -42,7 +45,7 @@ struct DescriptorBindingInfo
 enum class EDescriptorDataProviderType
 {
 	None,
-	Image,
+	Texture,
 	Buffer,
 	All
 };
@@ -55,8 +58,8 @@ struct DescriptorSetDataProviderBuffer
 };
 
 /// <summary>
-/// Abstrac struct used to set the image / buffer data in the set writes
-/// You can choose if you want to send and image a buffer or both wit the provider type
+/// Abstrac struct used to set the texture / buffer data in the set writes
+/// You can choose if you want to send and texture a buffer or both wit the provider type
 /// The buffer also allows you to provide an offset and a range in the buffer
 /// </summary>
 struct DescriptorDataProvider
@@ -65,5 +68,5 @@ struct DescriptorDataProvider
 	GenericHandle descriptorSet;
 
 	DescriptorSetDataProviderBuffer dataProviderBuffer;
-	AllocatedImage image;
+	AllocatedTexture texture;
 };

@@ -35,14 +35,26 @@ void RenderPipeline::Initialize(const VkContext& inContext, RenderingInterface* 
 	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
 	vertShaderStageInfo.module = vertShaderModule;
 	vertShaderStageInfo.pName = "main";
+	VkSpecializationInfo vertSpecializationInfo{};
+	if (CreateVertexSpecializationInfo(vertSpecializationInfo))
+	{
+		std::vector<VkSpecializationMapEntry> vertexMap = CreateVertexSpecializationMap(vertSpecializationInfo.dataSize);
+		vertSpecializationInfo.pMapEntries = vertexMap.data();
+		vertShaderStageInfo.pSpecializationInfo = &vertSpecializationInfo;
+	}
 
 	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
 	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	fragShaderStageInfo.module = fragShaderModule;
 	fragShaderStageInfo.pName = "main";
-
-	SetSpecializationConstants(vertShaderStageInfo, fragShaderStageInfo);
+	VkSpecializationInfo fragSpecializationInfo{};
+	if (CreateFragmentSpecializationInfo(fragSpecializationInfo))
+	{
+		std::vector<VkSpecializationMapEntry> fragmentMap = CreateFragmentSpecializationMap(fragSpecializationInfo.dataSize);
+		fragSpecializationInfo.pMapEntries = fragmentMap.data();
+		fragShaderStageInfo.pSpecializationInfo = &fragSpecializationInfo;
+	}
 
 	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
@@ -249,11 +261,11 @@ void RenderPipeline::UpdateMaterialDescriptorSet(const std::unordered_map<std::s
 			const DescriptorDataProvider& provider = it->second;
 
 			VkDescriptorImageInfo imageInfo{};
-			if (provider.providerType == EDescriptorDataProviderType::Image || provider.providerType == EDescriptorDataProviderType::All)
+			if (provider.providerType == EDescriptorDataProviderType::Texture || provider.providerType == EDescriptorDataProviderType::All)
 			{
 				imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				imageInfo.imageView = RenderUtilities::GenericHandleToImageView(provider.image.view);
-				imageInfo.sampler = RenderUtilities::GenericHandleToImageSampler(provider.image.sampler);
+				imageInfo.imageView = RenderUtilities::GenericHandleToImageView(provider.texture.view);
+				imageInfo.sampler = RenderUtilities::GenericHandleToImageSampler(provider.texture.sampler);
 			}
 
 			VkDescriptorBufferInfo bufferInfo{};
@@ -278,4 +290,14 @@ void RenderPipeline::UpdateMaterialDescriptorSet(const std::unordered_map<std::s
 	}
 
 	vkUpdateDescriptorSets(context.device, writes.size(), writes.data(), 0, nullptr);
+}
+
+bool RenderPipeline::SupportsCamera() const
+{
+	return (flags & MATRICES_DESCRIPTOR_FLAG) != 0;
+}
+
+bool RenderPipeline::SupportsLight() const
+{
+	return (flags & LIGHT_DESCRIPTOR_FLAG) != 0;
 }

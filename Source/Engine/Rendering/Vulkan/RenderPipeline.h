@@ -36,10 +36,17 @@ public:
 	VkPipelineLayout GetLayout() const { return pipelineLayout; }
 	const std::string& GetName() const { return name; }
 
+	bool SupportsCamera() const;
+	bool SupportsLight() const;
+
 	const DescriptorSetLayoutInfo& GetMaterialLayout() const { return materialLayout; }
 
 protected:
-	virtual void SetSpecializationConstants(VkPipelineShaderStageCreateInfo& vertexShader, VkPipelineShaderStageCreateInfo& fragmentShader) = 0;
+	virtual bool CreateVertexSpecializationInfo(VkSpecializationInfo& outInfo) = 0;
+	virtual std::vector<VkSpecializationMapEntry> CreateVertexSpecializationMap(size_t& dataSize) = 0;
+	virtual bool CreateFragmentSpecializationInfo(VkSpecializationInfo& outInfo) = 0;
+	virtual std::vector<VkSpecializationMapEntry> CreateFragmentSpecializationMap(size_t& dataSize) = 0;
+
 	virtual void CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& vertexInputInfo) = 0;
 	virtual void CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSetLayout>& outDescriptorSetLayouts) = 0;
 	virtual std::vector<VkPushConstantRange> GetPipelinePushConstants() = 0;
@@ -59,6 +66,8 @@ protected:
 
 	DescriptorSetLayoutInfo materialLayout;
 	std::vector<DescriptorBindingInfo> descriptorBindings;
+
+	uint32_t flags = 0;
 
 	std::vector<VkDynamicState> dynamicStates =
 	{

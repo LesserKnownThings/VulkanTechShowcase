@@ -1,5 +1,6 @@
 #include "RenderingInterface.h"
 #include "Descriptors/DescriptorRegistry.h"
+#include "ECS/Systems/MaterialSystem.h"
 #include "Engine.h"
 #include "Input/InputSystem.h"
 #include "TaskManager.h"
@@ -14,6 +15,8 @@ bool RenderingInterface::Initialize(int32_t inWidth, int32_t inHeight)
 		height = inHeight;
 	}
 
+	materialSystem = new MaterialSystem();
+
 	InputSystem* inputSystem = GameEngine->GetInputSystem();
 	inputSystem->onWindowResize.Bind(this, &RenderingInterface::HandleWindowResized);
 	inputSystem->onWindowMinimized.Bind(this, &RenderingInterface::HandleWindowMinimized);
@@ -26,6 +29,9 @@ void RenderingInterface::UnInitialize()
 	InputSystem* inputSystem = GameEngine->GetInputSystem();
 	inputSystem->onWindowResize.Clear(this);
 	inputSystem->onWindowMinimized.Clear(this);
+
+	delete descriptorRegistry;
+	delete materialSystem;
 	SDL_DestroyWindow(window);
 }
 

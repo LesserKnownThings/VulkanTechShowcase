@@ -13,10 +13,12 @@
 #include <vector>
 
 class DescriptorRegistry;
+class MaterialSystem;
 class Texture;
 
 struct DescriptorDataProvider;
 struct DescriptorSetLayoutInfo;
+struct LightInstance;
 struct MeshData;
 struct MeshRenderData;
 struct TextureData;
@@ -47,6 +49,7 @@ public:
 	virtual void CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& globalLayout, DescriptorSetLayoutInfo& lightLayout) = 0;
 	virtual void AllocateGlobalDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, std::array<GenericHandle, MAX_FRAMES_IN_FLIGHT>& outDescriptorSets) = 0;
 	virtual void AllocateLightDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, GenericHandle& outDescriptorSet) = 0;
+	virtual void DestroyDescriptorSetLayout(const DescriptorSetLayoutInfo& layoutInfo) = 0;
 	// *******************
 
 	// Setters
@@ -54,12 +57,15 @@ public:
 	virtual void UpdateView(const glm::mat4& view) = 0;
 	//********
 
+	// Buffer manips
 	virtual void CreateMeshVertexBuffer(const MeshData& meshData, MeshRenderData& outRenderData) = 0;
 	virtual void CreateTextureBuffer(const TextureData& textureData, void* pixels, TextureRenderData& renderData) = 0;
 
-	virtual void DestroyBuffer(GenericHandle buffer, GenericHandle bufferMemory) = 0;
-	virtual void DestroyMeshVertexBuffer(const MeshRenderData& renderData) = 0;
-	virtual void DestroyTextureBuffer(const TextureRenderData& renderData) = 0;
+	virtual void UpdateBuffer(AllocatedBuffer buffer, uint32_t offset, uint32_t range, void* dataToCopy) = 0;
+
+	virtual void DestroyBuffer(AllocatedBuffer buffer) = 0;
+	virtual void DestroyTexture(AllocatedTexture texture) = 0;
+	// ************
 
 	SDL_Window* GetWindow() const { return window; }
 	int32_t GetWindowWidth() const { return width; }
@@ -67,6 +73,7 @@ public:
 	float GetAspectRatio() const { return aspectRatio; }
 
 	DescriptorRegistry* GetDescriptorRegistry() const { return descriptorRegistry; }
+	MaterialSystem* GetMaterialSystem() const { return materialSystem; }
 
 	OnWindowResizeParams onWindowResizeParams;
 
@@ -86,4 +93,5 @@ protected:
 
 	// Subsystems
 	DescriptorRegistry* descriptorRegistry = nullptr;
+	MaterialSystem* materialSystem = nullptr;
 };

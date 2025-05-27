@@ -613,7 +613,7 @@ void VulkanRendering::CreateLightBuffer(AllocatedBuffer& outBuffer)
 	VmaAllocation memory;
 
 	CreateBuffer(
-		sizeof(LightBufferLayout) * MAX_LIGHTS,
+		sizeof(LightInstance) * MAX_LIGHTS,
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 		VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
 		VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
@@ -739,6 +739,12 @@ void VulkanRendering::AllocateLightDescriptorSet(const DescriptorSetLayoutInfo& 
 	vkUpdateDescriptorSets(context.device, 1, &write, 0, nullptr);
 }
 
+void VulkanRendering::DestroyDescriptorSetLayout(const DescriptorSetLayoutInfo& layoutInfo)
+{
+	VkDescriptorSetLayout layout = RenderUtilities::GenericHandleToDescriptorSetLayout(layoutInfo.layout);
+	vkDestroyDescriptorSetLayout(context.device, layout, nullptr);
+}
+
 void VulkanRendering::CreateRenderPipelines()
 {
 	PBRPipeline* litPipeline = new PBRPipeline();
@@ -828,12 +834,12 @@ void VulkanRendering::CleanupPendingDestroyBuffers()
 	}
 	buffersPendingDelete.clear();
 
-	for (AllocatedImage& images : imagesPendingDelete)
+	for (AllocatedTexture& texture : imagesPendingDelete)
 	{
-		VkImage image = RenderUtilities::GenericHandleToImage(images.image);
-		VmaAllocation memory = RenderUtilities::GenericHandleToAllocation(images.memory);
-		VkImageView imageView = RenderUtilities::GenericHandleToImageView(images.view);
-		VkSampler sampler = RenderUtilities::GenericHandleToImageSampler(images.sampler);
+		VkImage image = RenderUtilities::GenericHandleToImage(texture.image);
+		VmaAllocation memory = RenderUtilities::GenericHandleToAllocation(texture.memory);
+		VkImageView imageView = RenderUtilities::GenericHandleToImageView(texture.view);
+		VkSampler sampler = RenderUtilities::GenericHandleToImageSampler(texture.sampler);
 
 		vmaDestroyImage(context.allocator, image, memory);
 		vkDestroyImageView(context.device, imageView, nullptr);
@@ -1207,6 +1213,8 @@ std::vector<const char*> VulkanRendering::GetRequiredExtensions() const
 void VulkanRendering::UnInitialize()
 {
 	CleanupSwapChain();
+	descriptorRegistry->UnInitialize();
+	materialSystem->ReleaseResources();
 	CleanupPendingDestroyBuffers();
 
 	for (Frame& renderFrame : renderFrames)
@@ -1292,18 +1300,25 @@ void VulkanRendering::DrawSingle(const std::vector<entt::entity>& entities, cons
 		const Transform& transform = registry.get<const Transform>(entity);
 		const Material& material = registry.get<const Material>(entity);
 		MaterialInstance materialInstance;
-		GameEngine->GetMaterialSystem()->TryGetMaterialInstance(material.materialInstanceHandle, materialInstance);
+		materialSystem->TryGetMaterialInstance(material.materialInstanceHandle, materialInstance);
 
 		RenderPipeline* pipeline = renderPipelines[material.pipeline];
 
 		pipeline->Bind(cmdBuffer);
-		
-		std::vector<VkDescriptorSet> sets =
+
+		std::vector<VkDescriptorSet> sets = {};
+
+		if (pipeline->SupportsCamera())
 		{
-			RenderUtilities::GenericHandleToDescriptorSet(descriptorRegistry->GetGlobalDescriptorSets()[currentFrame]),
-			RenderUtilities::GenericHandleToDescriptorSet(descriptorRegistry->GetLightDescriptorSet()),
-			RenderUtilities::GenericHandleToDescriptorSet(materialInstance.descriptorSet)			
-		};
+			sets.push_back(RenderUtilities::GenericHandleToDescriptorSet(descriptorRegistry->GetGlobalDescriptorSets()[currentFrame]));
+		}
+
+		if (pipeline->SupportsLight())
+		{
+			sets.push_back(RenderUtilities::GenericHandleToDescriptorSet(descriptorRegistry->GetLightDescriptorSet()));
+		}
+
+		sets.push_back(RenderUtilities::GenericHandleToDescriptorSet(materialInstance.descriptorSet));
 
 		vkCmdBindDescriptorSets(cmdBuffer,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1313,14 +1328,27 @@ void VulkanRendering::DrawSingle(const std::vector<entt::entity>& entities, cons
 			sets.data(),
 			0, nullptr);
 
-		glm::mat4 transformModel = transform.ComputeModel();
-
 		vkCmdPushConstants(cmdBuffer,
 			pipeline->GetLayout(),
 			VK_SHADER_STAGE_VERTEX_BIT,
 			0,
-			sizeof(glm::mat4),
-			&transformModel);
+			sizeof(EntityTransformModel),
+			glm::value_ptr(transform.ComputeModel()));
+
+		if (pipeline->SupportsLight())
+		{
+			LightConstant lightConstant{};
+			lightConstant.normalMatrix = transform.ComputeNormalMatrix();
+			lightConstant.lightsCount = 1;
+			lightConstant.ambientStrength = 0.30f;
+
+			vkCmdPushConstants(cmdBuffer,
+				pipeline->GetLayout(),
+				VK_SHADER_STAGE_FRAGMENT_BIT,
+				sizeof(EntityTransformModel),
+				sizeof(LightConstant),
+				&lightConstant);
+		}
 
 		Mesh meshComp = registry.get<Mesh>(entity);
 		const Model* model = AssetManager::Get().LoadAsset<Model>(meshComp.handle);
@@ -1548,8 +1576,8 @@ void VulkanRendering::CreateTextureBuffer(const TextureData& textureData, void* 
 	// Mipmaps already transfer the layout so no need to do another cmd
 	GenerateMipmaps(imageBuffer, textureData.width, textureData.height, textureData.mipLevels);
 
-	renderData.image.image = RenderUtilities::ImageToGenericHandle(imageBuffer);
-	renderData.image.memory = RenderUtilities::AllocationToGenericHandle(imageMemory);
+	renderData.texture.image = RenderUtilities::ImageToGenericHandle(imageBuffer);
+	renderData.texture.memory = RenderUtilities::AllocationToGenericHandle(imageMemory);
 
 	vmaDestroyBuffer(context.allocator, stagingBuffer, stagingBufferMemory);
 
@@ -1570,7 +1598,7 @@ void VulkanRendering::CreateTextureBuffer(const TextureData& textureData, void* 
 		std::cerr << "Failed to create image view!" << std::endl;
 	}
 
-	renderData.image.view = RenderUtilities::ImageViewToGenericHandle(imageView);
+	renderData.texture.view = RenderUtilities::ImageViewToGenericHandle(imageView);
 
 	VkSamplerCreateInfo samplerInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -1600,7 +1628,7 @@ void VulkanRendering::CreateTextureBuffer(const TextureData& textureData, void* 
 		std::cerr << "Failed tocreate image sampler!" << std::endl;
 	}
 
-	renderData.image.sampler = RenderUtilities::ImageSamplerToGenericHandle(sampler);
+	renderData.texture.sampler = RenderUtilities::ImageSamplerToGenericHandle(sampler);
 	renderData.state = ERenderDataLoadState::Ready;
 	//};
 
@@ -1608,28 +1636,23 @@ void VulkanRendering::CreateTextureBuffer(const TextureData& textureData, void* 
 t.detach();*/
 }
 
-void VulkanRendering::DestroyBuffer(GenericHandle buffer, GenericHandle bufferMemory)
+void VulkanRendering::UpdateBuffer(AllocatedBuffer buffer, uint32_t offset, uint32_t range, void* dataToCopy)
 {
-	buffersPendingDelete.push_back(AllocatedBuffer{ buffer, bufferMemory });
+	VmaAllocation memory = RenderUtilities::GenericHandleToAllocation(buffer.memory);
+	void* data;
+	vmaMapMemory(context.allocator, memory, &data);
+	memcpy(static_cast<char*>(data) + offset, dataToCopy, range);
+	vmaUnmapMemory(context.allocator, memory);
 }
 
-void VulkanRendering::DestroyMeshVertexBuffer(const MeshRenderData& renderData)
+void VulkanRendering::DestroyBuffer(AllocatedBuffer buffer)
 {
-	DestroyBuffer(renderData.vertex.buffer, renderData.vertex.memory);
-	DestroyBuffer(renderData.index.buffer, renderData.index.memory);
+	buffersPendingDelete.push_back(buffer);
 }
 
-void VulkanRendering::DestroyTextureBuffer(const TextureRenderData& renderData)
+void VulkanRendering::DestroyTexture(AllocatedTexture texture)
 {
-	imagesPendingDelete.push_back(renderData.image);
-}
-
-void VulkanRendering::DestroyBuffer(VkBuffer buffer, VmaAllocation bufferMemory)
-{
-	buffersPendingDelete.push_back(AllocatedBuffer{
-		RenderUtilities::BufferToGenericHandle(buffer),
-		RenderUtilities::AllocationToGenericHandle(bufferMemory)
-		});
+	imagesPendingDelete.push_back(texture);
 }
 
 void VulkanRendering::RecordCommandBuffer(uint32_t imageIndex)

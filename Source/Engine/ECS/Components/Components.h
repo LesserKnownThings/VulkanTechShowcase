@@ -11,6 +11,8 @@ struct Transform
 	glm::vec3 eulers = glm::vec3(0.0f);
 	glm::vec3 scale = glm::vec3(1.0f);
 
+	// TODO move these to a system instead of the component
+
 	glm::mat4 ComputeModel() const
 	{
 		glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
@@ -20,12 +22,17 @@ struct Transform
 		model = glm::scale(model, scale);
 		return model;
 	}
+
+	glm::mat3 ComputeNormalMatrix() const
+	{
+		return glm::transpose(glm::inverse(glm::mat3(ComputeModel())));
+	}
 };
 
 struct Material
 {
 	EPipelineType pipeline;
-	uint32_t materialInstanceHandle = 0;	
+	uint32_t materialInstanceHandle = 0;
 };
 
 struct Mesh
@@ -35,5 +42,5 @@ struct Mesh
 
 struct Light
 {
-	uint32_t handle = 0;
+	uint32_t lightInstanceHandle = 0;
 };

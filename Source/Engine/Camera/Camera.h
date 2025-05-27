@@ -6,6 +6,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+
 enum ECameraType : uint8_t
 {
     Orthographic,
@@ -13,8 +15,8 @@ enum ECameraType : uint8_t
 };
 
 constexpr glm::vec3 worldRight = glm::vec3(1.0f, 0.0f, 0.0f);
+constexpr glm::vec3 worldUp = glm::vec3(0.0f, -1.0f, 0.0f);
 constexpr glm::vec3 worldForward = glm::vec3(0.0f, 0.0f, -1.0f);
-constexpr glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
 class Camera
 {
@@ -34,7 +36,7 @@ public:
 
     void SetPosition(const glm::vec3 &newPosition);
     void SetRotation(const glm::vec3 &eulerAngles);
-    void Rotate(const glm::vec3 &axis, const glm::vec2 &pitchClamp = glm::vec2(-89.9f, 89.9f));
+    void Rotate(const glm::vec3 &axis, const glm::vec2& pitchClamp = glm::vec2(-89.0f, 89.0f));
 
     const glm::vec3 &GetPosition() const { return position; }
     const float &GetOrthographicSize() const { return ortographicSize; }
@@ -72,7 +74,7 @@ protected:
     glm::vec3 position = glm::vec3(0.0f);
 
     glm::vec3 forward = glm::vec3(0.0f, 0.0f, -1.0f);
-    glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+    glm::vec3 up = glm::vec3(0.0f, -1.0f, 0.0f);
     glm::vec3 right = glm::vec3(1.0f, 0.0f, 0.0f);
 
     float pitch = 0.0f;

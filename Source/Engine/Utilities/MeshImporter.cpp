@@ -108,7 +108,7 @@ void MeshImporter::ImportModel(const std::string& path, std::vector<MeshData>& o
 {
 	Assimp::Importer import;
 	const aiScene * scene = import.ReadFile(path,
-		aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace | aiProcess_JoinIdenticalVertices | aiProcess_DropNormals);
+		aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace | aiProcess_JoinIdenticalVertices);
 
 	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
 	{

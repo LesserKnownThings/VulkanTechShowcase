@@ -6,7 +6,6 @@
 #define GameEngine Engine::Get()
 
 class InputSystem;
-class MaterialSystem;
 class RenderingInterface;
 class SDLInterface;
 class World;
@@ -27,7 +26,6 @@ public:
 
 	RenderingInterface* GetRenderingSystem() const { return renderingInterface; }
 	InputSystem* GetInputSystem() const { return inputSystem; }
-	MaterialSystem* GetMaterialSystem() const { return materialSystem; }
 
 private:
 	void InitializeECSSystems();
@@ -38,7 +36,6 @@ private:
 	InputSystem* inputSystem = nullptr;
 	RenderingInterface* renderingInterface = nullptr;
 	SDLInterface* sdlInterface = nullptr;
-	MaterialSystem* materialSystem = nullptr;
 
 	World* currentWorld = nullptr;
 

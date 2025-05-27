@@ -23,8 +23,10 @@ bool Model::LoadAsset(const std::string& path)
 
 void Model::UnloadAsset()
 {
+	RenderingInterface* renderingInterface = GameEngine->GetRenderingSystem();
 	for (MeshRenderData& meshRenderData : renderData)
 	{
-		GameEngine->GetRenderingSystem()->DestroyMeshVertexBuffer(meshRenderData);
+		renderingInterface->DestroyBuffer(meshRenderData.vertex);
+		renderingInterface->DestroyBuffer(meshRenderData.index);
 	}
 }

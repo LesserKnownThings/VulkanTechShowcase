@@ -37,7 +37,7 @@ Camera::Camera(const glm::vec3& initialPosition, const glm::vec3& initialRotatio
 	SetRotation(initialRotation);
 
 	UpdateProjectionType();
-	UpdateVectors();	
+	UpdateVectors();
 }
 
 void Camera::ChangeType(ECameraType inType)
@@ -118,7 +118,9 @@ void Camera::Rotate(const glm::vec3& axis, const glm::vec2& pitchClamp)
 	pitch += axis.x;
 	pitch = glm::clamp(pitch, pitchClamp.x, pitchClamp.y);
 	yaw += axis.y;
+	yaw = glm::mod(yaw, 360.0f);
 	roll += axis.z;
+	roll = glm::mod(roll, 360.0f);
 
 	rotation = glm::normalize(glm::quat(glm::radians(glm::vec3(pitch, yaw, roll))));
 	UpdateDirections();
@@ -129,6 +131,7 @@ void Camera::UpdateDirections()
 	forward = glm::normalize(rotation * glm::vec3(0.f, 0.f, -1.f));
 	up = glm::normalize(rotation * glm::vec3(0.f, 1.f, 0.f));
 	right = glm::normalize(rotation * glm::vec3(1.f, 0.f, 0.f));
+	UpdateVectors();
 }
 
 void Camera::HandleWindowResize(float width, float height)
@@ -180,7 +183,7 @@ void Camera::Tick(float deltaTime)
 void Camera::SetPerspectiveCamera()
 {
 	const float aspectRatio = GameEngine->GetRenderingSystem()->GetAspectRatio();
-	projection = glm::perspective(glm::radians(fieldOfView), aspectRatio, nearView, farView);
+	projection = glm::perspectiveRH_ZO(glm::radians(fieldOfView), aspectRatio, nearView, farView);
 	projection[1][1] *= -1;
 }
 

@@ -1,10 +1,14 @@
 #pragma once
 
+#include <cstdint>
 #include <entt/entt.hpp>
 #include <unordered_map>
 #include <vector>
 
+#include <glm/glm.hpp>
+
 class Camera;
+class LightSystem;
 
 class World
 {
@@ -17,7 +21,16 @@ protected:
 	virtual void Tick(float deltaTime);
 
 	Camera* camera = nullptr;
+	LightSystem* lightSystem = nullptr;
 
 	entt::registry registry;
+
+private:
+	void HandleCameraMovement(float deltaTime);
+	void HandleCameraLook(float deltaTime);
+
+	void HandleMouseButton(uint8_t button, bool isPressed, const glm::vec2& position);
+
+	bool isLooking = false;
 };
 

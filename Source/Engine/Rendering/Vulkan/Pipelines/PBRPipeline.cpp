@@ -9,37 +9,70 @@
 #include <cstdint>
 #include <iostream>
 
-void PBRPipeline::SetSpecializationConstants(VkPipelineShaderStageCreateInfo& vertexShader, VkPipelineShaderStageCreateInfo& fragmentShader)
-{
-	VkSpecializationMapEntry entry = {
-	.constantID = 0,
-	.offset = 0,
-	.size = sizeof(MAX_LIGHTS)
-	};
-
-	VkSpecializationInfo specInfo = {};
-	specInfo.mapEntryCount = 1;
-	specInfo.pMapEntries = &entry;
-	specInfo.dataSize = sizeof(uint32_t);
-	specInfo.pData = &MAX_LIGHTS;
-
-	fragmentShader.pSpecializationInfo = &specInfo;
-}
-
 std::vector<VkPushConstantRange> PBRPipeline::GetPipelinePushConstants()
 {
 	std::vector<VkPushConstantRange> pushConstants(2);
 
 	pushConstants[0].offset = 0;
-	pushConstants[0].size = sizeof(SingleEntityConstant);
+	pushConstants[0].size = sizeof(EntityTransformModel);
 	pushConstants[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-
-	pushConstants[1].offset = sizeof(SingleEntityConstant);
+	pushConstants[1].offset = sizeof(EntityTransformModel);
 	pushConstants[1].size = sizeof(LightConstant);
 	pushConstants[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	return pushConstants;
+}
+
+bool PBRPipeline::CreateVertexSpecializationInfo(VkSpecializationInfo& outInfo)
+{
+	return false;
+}
+
+bool PBRPipeline::CreateFragmentSpecializationInfo(VkSpecializationInfo& outInfo)
+{
+	uint32_t data[4] = { MAX_LIGHTS, LIGHT_TYPE_DIRECTIONAL, LIGHT_TYPE_POINT, LIGHT_TYPE_SPOT };
+	outInfo.pData = data;
+	return true;
+}
+
+std::vector<VkSpecializationMapEntry> PBRPipeline::CreateVertexSpecializationMap(size_t& dataSize)
+{
+	return {};
+}
+
+std::vector<VkSpecializationMapEntry> PBRPipeline::CreateFragmentSpecializationMap(size_t& dataSize)
+{
+	std::vector<VkSpecializationMapEntry> map =
+	{
+		VkSpecializationMapEntry
+		{
+			.constantID = 0,
+			.offset = 0,
+			.size = sizeof(uint32_t)
+		},
+		VkSpecializationMapEntry
+		{
+			.constantID = 1,
+			.offset = sizeof(uint32_t),
+			.size = sizeof(uint32_t)
+		},
+		VkSpecializationMapEntry
+		{
+			.constantID = 2,
+			.offset = sizeof(uint32_t) * 2,
+			.size = sizeof(uint32_t)
+		},
+		VkSpecializationMapEntry
+		{
+			.constantID = 3,
+			.offset = sizeof(uint32_t) * 3,
+			.size = sizeof(uint32_t)
+		}
+	};
+
+	dataSize = sizeof(uint32_t) * map.size();
+	return map;
 }
 
 void PBRPipeline::CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& vertexInputInfo)
@@ -86,7 +119,6 @@ void PBRPipeline::CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& ve
 void PBRPipeline::CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSetLayout>& outDescriptorSetLayouts)
 {
 	// The order in which the layouts are pushed matters
-
 	if (const DescriptorRegistry* registry = renderingInterface->GetDescriptorRegistry())
 	{
 		VkDescriptorSetLayout globalLayout = RenderUtilities::GenericHandleToDescriptorSetLayout(registry->GetGlobalLayout().layout);
@@ -95,6 +127,7 @@ void PBRPipeline::CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSet
 		outDescriptorSetLayouts.push_back(globalLayout);
 		outDescriptorSetLayouts.push_back(lightLayout);
 
+		flags = MATRICES_DESCRIPTOR_FLAG | LIGHT_DESCRIPTOR_FLAG;
 	}
 
 	std::array<VkDescriptorSetLayoutBinding, 1> uboLayoutBinding = {};
