@@ -3,6 +3,7 @@
 #include "AssetManager/Model/Model.h"
 #include "AssetManager/Model/MeshData.h"
 #include "AssetManager/Texture/TextureData.h"
+#include "Camera/Camera.h"
 #include "ECS/Components/Components.h"
 #include "ECS/Systems/MaterialSystem.h"
 #include "Engine.h"
@@ -17,10 +18,12 @@
 #include "RenderPipeline.h"
 #include "RenderUtilities.h"
 #include "Utilities/FileHelper.h"
+#include "World/View.h"
 
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <entt/entity/registry.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <map>
@@ -850,6 +853,7 @@ void VulkanRendering::CleanupPendingDestroyBuffers()
 			vkDestroySampler(context.device, sampler, nullptr);
 		}
 	}
+	imagesPendingDelete.clear();
 }
 
 void VulkanRendering::RecreateSwapChain()
@@ -1290,90 +1294,132 @@ void VulkanRendering::DrawFrame()
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void VulkanRendering::DrawSingle(const std::vector<entt::entity>& entities, const entt::registry& registry)
+void VulkanRendering::DrawSingle(const View& view)
 {
 	Frame& frame = renderFrames[currentFrame];
 	VkCommandBuffer cmdBuffer = frame.commandBuffer;
 
-	for (const entt::entity& entity : entities)
+	Camera* cam = view.camera;
+	if (cam->ProjectionChanged())
 	{
-		const Transform& transform = registry.get<const Transform>(entity);
-		const Material& material = registry.get<const Material>(entity);
-		MaterialInstance materialInstance;
-		materialSystem->TryGetMaterialInstance(material.materialInstanceHandle, materialInstance);
+		cam->UpdateProjection([&](const glm::mat4& projection)
+			{
+				UpdateProjection(projection);
+			});
+	}
 
-		RenderPipeline* pipeline = renderPipelines[material.pipeline];
+	if (cam->ViewChanged())
+	{
+		cam->UpdateView([&](const glm::mat4& view)
+			{
+				UpdateView(view);
+			});
+	}
+
+	AssetManager& assetManager = AssetManager::Get();
+	std::unordered_map<EPipelineType, std::vector<entt::entity>> entitiesPerPipeline;
+	for (const entt::entity& entity : view.entitiesInView)
+	{
+		// I'm only supporting materials in the same render pipeline in the model
+		const ModelComponent& modelComponent = view.registry.get<const ModelComponent>(entity);
+		const Model* model = assetManager.LoadAsset<Model>(modelComponent.handle);
+		entitiesPerPipeline[static_cast<EPipelineType>(model->GetMeshData().materials[0].pipeline)].push_back(entity);
+	}
+
+	VkDescriptorSet previousMaterialDescriptor = VK_NULL_HANDLE;
+
+	for (const auto& it : entitiesPerPipeline)
+	{
+		RenderPipeline* pipeline = renderPipelines[it.first];
 
 		pipeline->Bind(cmdBuffer);
 
-		std::vector<VkDescriptorSet> sets = {};
-
-		if (pipeline->SupportsCamera())
+		const entt::registry& registry = view.registry;
+		for (const entt::entity& entity : it.second)
 		{
-			sets.push_back(RenderUtilities::GenericHandleToDescriptorSet(descriptorRegistry->GetGlobalDescriptorSets()[currentFrame]));
-		}
+			const Transform& transform = registry.get<const Transform>(entity);
+			const ModelComponent& modelComponent = registry.get<const ModelComponent>(entity);
 
-		if (pipeline->SupportsLight())
-		{
-			sets.push_back(RenderUtilities::GenericHandleToDescriptorSet(descriptorRegistry->GetLightDescriptorSet()));
-		}
+			std::vector<VkDescriptorSet> sets = {};
 
-		sets.push_back(RenderUtilities::GenericHandleToDescriptorSet(materialInstance.descriptorSet));
+			if (pipeline->SupportsCamera())
+			{
+				sets.push_back(RenderUtilities::GenericHandleToDescriptorSet(descriptorRegistry->GetGlobalDescriptorSets()[currentFrame]));
 
-		vkCmdBindDescriptorSets(cmdBuffer,
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			pipeline->GetLayout(),
-			0,
-			sets.size(),
-			sets.data(),
-			0, nullptr);
+				vkCmdPushConstants(cmdBuffer,
+					pipeline->GetLayout(),
+					VK_SHADER_STAGE_VERTEX_BIT,
+					0,
+					sizeof(EntityTransformModel),
+					glm::value_ptr(transform.ComputeModel()));
+			}
 
-		vkCmdPushConstants(cmdBuffer,
-			pipeline->GetLayout(),
-			VK_SHADER_STAGE_VERTEX_BIT,
-			0,
-			sizeof(EntityTransformModel),
-			glm::value_ptr(transform.ComputeModel()));
+			if (pipeline->SupportsLight())
+			{
+				sets.push_back(RenderUtilities::GenericHandleToDescriptorSet(descriptorRegistry->GetLightDescriptorSet()));
 
-		if (pipeline->SupportsLight())
-		{
-			LightConstant lightConstant{};
-			lightConstant.normalMatrix = transform.ComputeNormalMatrix();
-			lightConstant.lightsCount = 1;
-			lightConstant.ambientStrength = 0.30f;
+				LightConstant lightConstant{};
+				const glm::mat3 normalMatrix = transform.ComputeNormalMatrix();
+				const glm::vec3 viewPosition = cam->GetPosition();
+				lightConstant.normalMatrix = AlignedMatrix3{ normalMatrix, viewPosition };
+				lightConstant.lightsCount = view.lightsInView.size();
+				lightConstant.ambientStrength = 0.15f;
 
-			vkCmdPushConstants(cmdBuffer,
+				vkCmdPushConstants(cmdBuffer,
+					pipeline->GetLayout(),
+					VK_SHADER_STAGE_FRAGMENT_BIT,
+					sizeof(EntityTransformModel),
+					sizeof(LightConstant),
+					&lightConstant);
+			}
+
+			vkCmdBindDescriptorSets(cmdBuffer,
+				VK_PIPELINE_BIND_POINT_GRAPHICS,
 				pipeline->GetLayout(),
-				VK_SHADER_STAGE_FRAGMENT_BIT,
-				sizeof(EntityTransformModel),
-				sizeof(LightConstant),
-				&lightConstant);
+				0,
+				sets.size(),
+				sets.data(),
+				0, nullptr);
+
+			const Model* model = AssetManager::Get().LoadAsset<Model>(modelComponent.handle);
+			const MeshData& meshData = model->GetMeshData();
+			const MeshRenderData& renderData = model->GetRenderData();
+
+			VkBuffer buffer = RenderUtilities::GenericHandleToBuffer(renderData.vertex.buffer);
+			VkDeviceSize zeroOffset[] = { 0 };
+			vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &buffer, zeroOffset);
+
+			VkBuffer indexBuffer = RenderUtilities::GenericHandleToBuffer(renderData.index.buffer);
+			vkCmdBindIndexBuffer(cmdBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+			for (int32_t i = 0; i < meshData.meshesCount; ++i)
+			{
+				MaterialInstance materialInstance;
+				materialSystem->TryGetMaterialInstance(meshData.materials[i].materialInstanceHandle, materialInstance);
+
+				VkDescriptorSet materialDescriptorSet = RenderUtilities::GenericHandleToDescriptorSet(materialInstance.descriptorSet);
+				if (previousMaterialDescriptor != materialDescriptorSet)
+				{
+					vkCmdBindDescriptorSets(cmdBuffer,
+						VK_PIPELINE_BIND_POINT_GRAPHICS,
+						pipeline->GetLayout(),
+						sets.size(),
+						1,
+						&materialDescriptorSet,
+						0, nullptr);
+
+					previousMaterialDescriptor = materialDescriptorSet;
+				}
+
+				vkCmdDrawIndexed(cmdBuffer,
+					meshData.meshIndices[i].count,
+					1,
+					meshData.offset[i],
+					0,
+					0);
+			}
 		}
-
-		Mesh meshComp = registry.get<Mesh>(entity);
-		const Model* model = AssetManager::Get().LoadAsset<Model>(meshComp.handle);
-		MeshData meshData = model->GetMeshes()[0];
-		MeshRenderData renderData = model->GetRenderData()[0];
-
-		VkDeviceSize offsets[] = { 0 };
-		VkBuffer vertexBuffer = RenderUtilities::GenericHandleToBuffer(renderData.vertex.buffer);
-		vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &vertexBuffer, offsets);
-
-		VkBuffer indexBuffer = RenderUtilities::GenericHandleToBuffer(renderData.index.buffer);
-		vkCmdBindIndexBuffer(cmdBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-		vkCmdDrawIndexed(cmdBuffer,
-			meshData.indicesCount,
-			1,
-			0,
-			0,
-			0);
 	}
-}
-
-void VulkanRendering::DrawLight(const std::vector<entt::entity>& entities, const entt::registry& registry)
-{
-
 }
 
 void VulkanRendering::EndFrame()
@@ -1394,7 +1440,7 @@ void VulkanRendering::AllocateMaterialDescriptorSet(EPipelineType pipeline, Gene
 	}
 }
 
-void VulkanRendering::UpdateMaterialDescriptorSet(EPipelineType pipeline, const std::unordered_map<std::string, DescriptorDataProvider>& dataProviders)
+void VulkanRendering::UpdateMaterialDescriptorSet(EPipelineType pipeline, const std::unordered_map<EngineName, DescriptorDataProvider>& dataProviders)
 {
 	auto it = renderPipelines.find(pipeline);
 	if (it != renderPipelines.end())
@@ -1405,7 +1451,6 @@ void VulkanRendering::UpdateMaterialDescriptorSet(EPipelineType pipeline, const 
 
 void VulkanRendering::UpdateProjection(const glm::mat4& projection)
 {
-	// We rarely update projection so we need to update both in flight frames
 	for (int32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
 		VmaAllocation memory = RenderUtilities::GenericHandleToAllocation(descriptorRegistry->GetMatricesBuffers()[i].memory);
@@ -1419,13 +1464,15 @@ void VulkanRendering::UpdateProjection(const glm::mat4& projection)
 
 void VulkanRendering::UpdateView(const glm::mat4& view)
 {
-	VmaAllocation memory = RenderUtilities::GenericHandleToAllocation(descriptorRegistry->GetMatricesBuffers()[currentFrame].memory);
+	for (int32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	{
+		VmaAllocation memory = RenderUtilities::GenericHandleToAllocation(descriptorRegistry->GetMatricesBuffers()[i].memory);
 
-	void* data;
-	vmaMapMemory(context.allocator, memory, &data);
-	memcpy(static_cast<char*>(data) + sizeof(glm::mat4), glm::value_ptr(view), sizeof(glm::mat4));
-	vmaUnmapMemory(context.allocator, memory);
-
+		void* data;
+		vmaMapMemory(context.allocator, memory, &data);
+		memcpy(static_cast<char*>(data) + sizeof(glm::mat4), glm::value_ptr(view), sizeof(glm::mat4));
+		vmaUnmapMemory(context.allocator, memory);
+	}
 }
 
 void VulkanRendering::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags bufferUsage, VmaMemoryUsage usage, VmaAllocationCreateFlags properties, VkBuffer& buffer, VmaAllocation& bufferMemory) const
@@ -1451,7 +1498,7 @@ void VulkanRendering::CreateMeshVertexBuffer(const MeshData& meshData, MeshRende
 	/*auto func = [&]()
 		{*/
 	const VkDeviceSize verticesBufferSize = sizeof(Vertex) * meshData.verticesCount;
-	const VkDeviceSize indicesBufferSize = sizeof(uint32_t) * meshData.indicesCount;
+	VkDeviceSize indicesBufferSize = sizeof(uint32_t) * meshData.indicesCount;
 	const VkDeviceSize stagingBufferSize = verticesBufferSize + indicesBufferSize;
 
 	VkBuffer stagingBuffer;
@@ -1469,7 +1516,14 @@ void VulkanRendering::CreateMeshVertexBuffer(const MeshData& meshData, MeshRende
 	void* data;
 	vmaMapMemory(context.allocator, staginBufferMemory, &data);
 	memcpy(data, meshData.vertices.data(), static_cast<size_t>(verticesBufferSize));
-	memcpy(reinterpret_cast<char*>(data) + verticesBufferSize, meshData.indices.data(), static_cast<size_t>(indicesBufferSize));
+
+	uint32_t previousSize = 0;
+	for (int32_t i = 0; i < meshData.meshesCount; ++i)
+	{
+		const size_t bufferSize = sizeof(uint32_t) * meshData.meshIndices[i].count;
+		memcpy(reinterpret_cast<char*>(data) + verticesBufferSize + previousSize, meshData.meshIndices[i].indices.data(), bufferSize);
+		previousSize += bufferSize;
+	}
 	vmaUnmapMemory(context.allocator, staginBufferMemory);
 
 	VkBuffer vertexBuffer;

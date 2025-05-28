@@ -7,6 +7,7 @@
 #include <optional>
 #include <unordered_map>
 
+struct EngineName;
 struct Material;
 
 class MaterialSystem
@@ -14,9 +15,11 @@ class MaterialSystem
 public:
 	void ReleaseResources();
 
-	Material CreatePBRMaterial(std::optional<uint32_t> albedo = std::nullopt);
+	Material CreatePBRMaterial(std::optional<uint32_t> albedo = std::nullopt, bool makeUnique = false);
 
 	bool TryGetMaterialInstance(uint32_t handle, MaterialInstance& outInstance) const;
+
+	void SetTextures(uint32_t handle, const std::vector<MaterialDescriptorBindingResource>& resources);
 
 private:
 	std::unordered_map<uint32_t, MaterialInstance> materialInstances;

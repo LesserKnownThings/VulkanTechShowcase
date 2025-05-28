@@ -12,10 +12,10 @@ public:
 	virtual bool LoadAsset(const std::string& path) override;
 	virtual void UnloadAsset() override;
 
-	const std::vector<MeshData>& GetMeshes() const { return meshes; }
-	const std::vector<MeshRenderData>& GetRenderData() const { return renderData; }
+	const MeshData& GetMeshData() const { return meshData; }
+	const MeshRenderData& GetRenderData() const { return renderData; }
 
 private:
-	std::vector<MeshData> meshes;
-	std::vector<MeshRenderData> renderData;
+	MeshData meshData;
+	MeshRenderData renderData;
 };

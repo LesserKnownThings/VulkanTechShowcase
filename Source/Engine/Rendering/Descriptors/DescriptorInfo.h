@@ -1,10 +1,10 @@
 #pragma once
 
+#include "EngineName.h"
 #include "Rendering/AbstractData.h"
 
 #include <cassert>
 #include <cstdint>
-#include <string>
 #include <unordered_map>
 
 constexpr uint32_t MATRICES_DESCRIPTOR_FLAG = 1 << 0;
@@ -39,7 +39,7 @@ struct DescriptorBindingInfo
 	uint32_t binding = 0;
 	size_t type;
 	size_t stage;
-	std::string semantic;
+	EngineName semantic;
 };
 
 enum class EDescriptorDataProviderType

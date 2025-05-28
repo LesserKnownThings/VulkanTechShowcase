@@ -3,6 +3,7 @@
 #include "Utilities/Delegate.h"
 
 #include <cstdint>
+#include <functional>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -27,9 +28,7 @@ public:
     void ChangeType(ECameraType inType);
     void SetFieldOfView(float inFieldOfView);
     void SetNearView(float inNearView);
-    void SetFarView(float inFarView);
-
-    void UpdateVectors();
+    void SetFarView(float inFarView);    
 
     void SetOrthographicSize(float inOrthographicSize);
     void SetCameraZ(float inCameraZ);
@@ -49,8 +48,14 @@ public:
     const float GetNear() const { return nearView; }
     const float GetFar() const { return farView; }
 
+    void UpdateProjection(std::function<void(const glm::mat4& projection)> func);
+    void UpdateView(std::function<void(const glm::mat4& view)> func);
+
+    const bool ProjectionChanged() const { return projectionChanged; }
+    const bool ViewChanged() const { return viewChanged; }
+
 protected:
-    virtual void Tick(float deltaTime);
+    void UpdateVectors();
 
     void SetPerspectiveCamera();
     void SetOrthographicCamera();
@@ -85,4 +90,7 @@ protected:
 
     glm::mat4 projection = glm::mat4(1.0f);
     glm::mat4 view = glm::mat4(1.0f);
+
+    bool projectionChanged = false;
+    bool viewChanged = false;
 };

@@ -1,4 +1,5 @@
 #include "RenderPipeline.h"
+#include "EngineName.h"
 #include "Rendering/SharedUniforms.h"
 #include "Rendering/Vulkan/PushConstant.h"
 #include "Rendering/Vulkan/RenderUtilities.h"
@@ -249,7 +250,7 @@ void RenderPipeline::AllocateMaterialDescriptorSet(GenericHandle& outDescriptorS
 	outDescriptorSet = RenderUtilities::DescriptorSetToGenericHandle(set);
 }
 
-void RenderPipeline::UpdateMaterialDescriptorSet(const std::unordered_map<std::string, DescriptorDataProvider>& dataProviders)
+void RenderPipeline::UpdateMaterialDescriptorSet(const std::unordered_map<EngineName, DescriptorDataProvider>& dataProviders)
 {
 	std::vector<VkWriteDescriptorSet> writes;
 

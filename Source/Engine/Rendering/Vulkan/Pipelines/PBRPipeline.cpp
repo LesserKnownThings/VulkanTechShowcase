@@ -2,6 +2,7 @@
 #include "AssetManager/Model/MeshData.h"
 #include "Rendering/Descriptors/DescriptorRegistry.h"
 #include "Rendering/Light/Light.h"
+#include "Rendering/Material/MaterialSemantics.h"
 #include "Rendering/RenderingInterface.h"
 #include "Rendering/Vulkan/PushConstant.h"
 #include "Rendering/Vulkan/RenderUtilities.h"
@@ -31,7 +32,13 @@ bool PBRPipeline::CreateVertexSpecializationInfo(VkSpecializationInfo& outInfo)
 
 bool PBRPipeline::CreateFragmentSpecializationInfo(VkSpecializationInfo& outInfo)
 {
-	uint32_t data[4] = { MAX_LIGHTS, LIGHT_TYPE_DIRECTIONAL, LIGHT_TYPE_POINT, LIGHT_TYPE_SPOT };
+	uint32_t data[4] =
+	{
+		MAX_LIGHTS,
+		static_cast<uint32_t>(ELightType::Directional),
+		static_cast<uint32_t>(ELightType::Point),
+		static_cast<uint32_t>(ELightType::Spot)
+	};
 	outInfo.pData = data;
 	return true;
 }
@@ -143,7 +150,7 @@ void PBRPipeline::CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSet
 			EDescriptorOwner::Material, 0, 0,
 			static_cast<uint32_t>(uboLayoutBinding[0].descriptorType),
 			static_cast<uint32_t>(uboLayoutBinding[0].stageFlags),
-			"albedo"
+			MaterialSemantics::Albedo
 		});
 
 	VkDescriptorSetLayoutCreateInfo createInfo{};

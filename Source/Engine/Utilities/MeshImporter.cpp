@@ -1,5 +1,8 @@
 #include "MeshImporter.h"
 #include "AssetManager/Model/MeshData.h"
+#include "Engine.h"
+#include "ECS/Systems/MaterialSystem.h"
+#include "Rendering/RenderingInterface.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
@@ -37,41 +40,47 @@ namespace Utilities
 		}
 	}
 
-	void ProcessMesh(aiMesh* assimpMesh, const std::string& path, MeshData& outMeshData)
+	void ProcessMesh(aiMesh* assimpMesh, const std::string& path, MeshData& outMeshData, size_t vertexOffset, size_t& globalIndexOffset)
 	{
 		for (size_t i = 0; i < assimpMesh->mNumVertices; i++)
 		{
-			outMeshData.vertices[i].position.x = assimpMesh->mVertices[i].x;
-			outMeshData.vertices[i].position.y = assimpMesh->mVertices[i].y;
-			outMeshData.vertices[i].position.z = assimpMesh->mVertices[i].z;
+			glm::vec3 position{};
+			position.x = assimpMesh->mVertices[i].x;
+			position.y = assimpMesh->mVertices[i].y;
+			position.z = assimpMesh->mVertices[i].z;
 
-			outMeshData.vertices[i].tangent.x = assimpMesh->mTangents[i].x;
-			outMeshData.vertices[i].tangent.y = assimpMesh->mTangents[i].y;
-			outMeshData.vertices[i].tangent.z = assimpMesh->mTangents[i].z;
+			glm::vec3 tangent{};
+			tangent.x = assimpMesh->mTangents[i].x;
+			tangent.y = assimpMesh->mTangents[i].y;
+			tangent.z = assimpMesh->mTangents[i].z;
 
-			outMeshData.vertices[i].biTangent.x = assimpMesh->mBitangents[i].x;
-			outMeshData.vertices[i].biTangent.y = assimpMesh->mBitangents[i].y;
-			outMeshData.vertices[i].biTangent.z = assimpMesh->mBitangents[i].z;
+			glm::vec3 bitangent{};
+			bitangent.x = assimpMesh->mBitangents[i].x;
+			bitangent.y = assimpMesh->mBitangents[i].y;
+			bitangent.z = assimpMesh->mBitangents[i].z;
 
+			glm::vec3 normal{};
 			if (assimpMesh->HasNormals())
 			{
-				outMeshData.vertices[i].normal.x = assimpMesh->mNormals[i].x;
-				outMeshData.vertices[i].normal.y = assimpMesh->mNormals[i].y;
-				outMeshData.vertices[i].normal.z = assimpMesh->mNormals[i].z;
-			}			
+				normal.x = assimpMesh->mNormals[i].x;
+				normal.y = assimpMesh->mNormals[i].y;
+				normal.z = assimpMesh->mNormals[i].z;
+			}
 
+			glm::vec2 uv{};
 			if (assimpMesh->mTextureCoords[0])
 			{
-				// a vertex can contain up to 8 different texture coordinates. We thus make the assumption that we won't
-				// use models where a vertex can have multiple texture coordinates so we always take the first set (0).
-				outMeshData.vertices[i].uv.x = assimpMesh->mTextureCoords[0][i].x;
-				outMeshData.vertices[i].uv.y = assimpMesh->mTextureCoords[0][i].y;
+				// TODO will need to test this with different models
+				uv.x = assimpMesh->mTextureCoords[0][i].x;
+				uv.y = assimpMesh->mTextureCoords[0][i].y;
 			}
 			else
-				outMeshData.vertices[i].uv = glm::vec2(0.0f, 0.0f);
+				uv = glm::vec2(0.0f, 0.0f);
+
+			outMeshData.vertices.emplace_back(Vertex{ position, normal, tangent, bitangent, uv });
 		}
 
-		//NormalizeVertices(outMeshData);
+		MeshIndexData meshIndexData{};
 
 		for (unsigned int i = 0; i < assimpMesh->mNumFaces; i++)
 		{
@@ -79,36 +88,66 @@ namespace Utilities
 
 			for (unsigned int j = 0; j < face.mNumIndices; j++)
 			{
-				outMeshData.indices.push_back(face.mIndices[j]);
-				outMeshData.indicesCount++;
+				meshIndexData.indices.push_back(face.mIndices[j] + static_cast<uint32_t>(vertexOffset));
+				meshIndexData.count++;
 			}
 		}
+
+		outMeshData.meshIndices.push_back(meshIndexData);
+		outMeshData.indicesCount += meshIndexData.count;
+		globalIndexOffset += meshIndexData.count;
 	}
 
-	void ProcessNodeForModel(aiNode* node, const aiScene* scene, const std::string& path, std::vector<MeshData>& outMeshes)
+	void ProcessNodeForModel(aiNode* node, const aiScene* scene, const std::string& path, MeshData& meshData, size_t& globalVertexOffset, size_t& globalIndexOffset)
 	{
 		for (size_t i = 0; i < node->mNumMeshes; ++i)
 		{
-			MeshData meshData;
 			aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-			meshData.verticesCount = mesh->mNumVertices;
-			meshData.vertices.resize(mesh->mNumVertices);
-			ProcessMesh(mesh, path, meshData);
-			outMeshes.push_back(meshData);
+			meshData.verticesCount += mesh->mNumVertices;
+			meshData.offset.push_back(globalIndexOffset);
+			meshData.meshesCount++;
+
+			ProcessMesh(mesh, path, meshData, globalVertexOffset, globalIndexOffset);
+
+			/*
+			* Supporting materials from the mesh is very frustrating especially when a lot of people don't
+			* properly set the materials. So each mesh will have the base engine textures.
+			*/
+			if (scene->HasMaterials())
+			{
+				for (int32_t i = 0; i < scene->mNumMaterials; ++i)
+				{
+					meshData.materials.push_back(GameEngine->GetRenderingSystem()->GetMaterialSystem()->CreatePBRMaterial(std::nullopt, true));
+				}
+			}
+
+			globalVertexOffset += meshData.verticesCount;
 		}
 
 		for (size_t i = 0; i < node->mNumChildren; ++i)
 		{
-			ProcessNodeForModel(node->mChildren[i], scene, path, outMeshes);
+			ProcessNodeForModel(node->mChildren[i], scene, path, meshData, globalVertexOffset, globalIndexOffset);
 		}
+	}
+
+	void ProcessNodeForModel(aiNode* node, const aiScene* scene, const std::string& path, MeshData& meshData)
+	{
+		size_t globalVertexOffset = 0;
+		size_t globalIndexOffset = 0;
+
+		ProcessNodeForModel(node, scene, path, meshData, globalVertexOffset, globalIndexOffset);
 	}
 }
 
-void MeshImporter::ImportModel(const std::string& path, std::vector<MeshData>& outMeshes)
+void MeshImporter::ImportModel(const std::string& path, MeshData& outMeshData)
 {
 	Assimp::Importer import;
 	const aiScene * scene = import.ReadFile(path,
-		aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace | aiProcess_JoinIdenticalVertices);
+		aiProcess_Triangulate
+		| aiProcess_GenSmoothNormals
+		| aiProcess_FlipUVs
+		| aiProcess_CalcTangentSpace
+		| aiProcess_JoinIdenticalVertices);
 
 	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
 	{
@@ -116,5 +155,5 @@ void MeshImporter::ImportModel(const std::string& path, std::vector<MeshData>& o
 		return;
 	}
 
-	Utilities::ProcessNodeForModel(scene->mRootNode, scene, path, outMeshes);
+	Utilities::ProcessNodeForModel(scene->mRootNode, scene, path, outMeshData);
 }

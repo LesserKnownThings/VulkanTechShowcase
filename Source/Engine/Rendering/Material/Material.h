@@ -1,5 +1,6 @@
 #pragma once
 
+#include "EngineName.h"
 #include "Rendering/AbstractData.h"
 #include "Rendering/Descriptors/DescriptorInfo.h"
 
@@ -16,7 +17,7 @@ inline void HashCombine(std::size_t& seed, const T& v)
 
 struct MaterialDescriptorBindingResource
 {
-	std::string semantic;
+	EngineName semantic;
 	uint32_t textureAssetHandle;
 
 	bool operator==(const MaterialDescriptorBindingResource& other) const
@@ -32,7 +33,7 @@ struct std::hash<MaterialDescriptorBindingResource>
 	std::size_t operator()(const MaterialDescriptorBindingResource& resource) const noexcept
 	{
 		std::size_t seed = 0;
-		HashCombine(seed, resource.semantic);
+		HashCombine(seed, resource.semantic.hash);
 		HashCombine(seed, resource.textureAssetHandle);
 		return seed;
 	}

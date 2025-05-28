@@ -1,6 +1,5 @@
 #pragma once
 
-#include "EngineName.h"
 #include "Frame.h"
 #include "Rendering/AbstractData.h"
 #include "Rendering/RenderingInterface.h"
@@ -44,13 +43,12 @@ public:
 	void UnInitialize() override;
 
 	void DrawFrame() override;
-	void DrawSingle(const std::vector<entt::entity>& entities, const entt::registry& registry) override;
-	void DrawLight(const std::vector<entt::entity>& entities, const entt::registry& registry) override;
+	void DrawSingle(const View& view) override;
 	void EndFrame() override;
 
 	// Material descriptors
 	void AllocateMaterialDescriptorSet(EPipelineType pipeline, GenericHandle& outDescriptorSet) override;
-	void UpdateMaterialDescriptorSet(EPipelineType pipeline, const std::unordered_map<std::string, DescriptorDataProvider>& dataProviders) override;
+	void UpdateMaterialDescriptorSet(EPipelineType pipeline, const std::unordered_map<EngineName, DescriptorDataProvider>& dataProviders) override;
 	// *******************
 
 	/// Global descriptors
@@ -61,9 +59,6 @@ public:
 	void AllocateLightDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, GenericHandle& outDescriptorSet) override;
 	void DestroyDescriptorSetLayout(const DescriptorSetLayoutInfo& layoutInfo) override;
 	// *******************
-
-	virtual void UpdateProjection(const glm::mat4& projection) override;
-	virtual void UpdateView(const glm::mat4& view) override;
 
 	// Buffer manips
 	void CreateMeshVertexBuffer(const MeshData& meshData, MeshRenderData& outRenderData) override;
@@ -76,6 +71,9 @@ public:
 	// ************
 
 protected:
+	void UpdateProjection(const glm::mat4& projection) override;
+	void UpdateView(const glm::mat4& view) override;
+
 	void HandleWindowResized() override;
 	void HandleWindowMinimized() override;
 

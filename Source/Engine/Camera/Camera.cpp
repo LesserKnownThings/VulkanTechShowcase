@@ -1,8 +1,6 @@
 #include "Camera.h"
 #include "Engine.h"
-
 #include "Rendering/RenderingInterface.h"
-#include "TaskManager.h"
 
 #include <iostream>
 #define GLM_ENABLE_EXPERIMENTAL
@@ -25,14 +23,12 @@ namespace Utilities
 Camera::~Camera()
 {
 	GameEngine->GetRenderingSystem()->onWindowResizeParams.Clear(this);
-	TaskManager::Get().RemoveAllTasks(this);
 }
 
 Camera::Camera(const glm::vec3& initialPosition, const glm::vec3& initialRotation)
 	: position(initialPosition)
 {
 	GameEngine->GetRenderingSystem()->onWindowResizeParams.Bind(this, &Camera::HandleWindowResize);
-	TaskManager::Get().RegisterTask(this, &Camera::Tick, TICK_HANDLE);
 
 	SetRotation(initialRotation);
 
@@ -154,6 +150,18 @@ const glm::vec3& Camera::GetRightVector() const
 	return right;
 }
 
+void Camera::UpdateProjection(std::function<void(const glm::mat4& projection)> func)
+{
+	func(projection);
+	projectionChanged = false;
+}
+
+void Camera::UpdateView(std::function<void(const glm::mat4& view)> func)
+{
+	func(view);
+	viewChanged = false;
+}
+
 const glm::vec3& Camera::GetUpVector() const
 {
 	return up;
@@ -172,12 +180,7 @@ void Camera::UpdateProjectionType()
 		break;
 	}
 
-	GameEngine->GetRenderingSystem()->UpdateProjection(projection);
-}
-
-void Camera::Tick(float deltaTime)
-{
-
+	projectionChanged = true;
 }
 
 void Camera::SetPerspectiveCamera()
@@ -211,4 +214,6 @@ void Camera::UpdateVectors()
 	{
 		view = glm::translate(glm::mat4(1.0f), position);
 	}
+
+	viewChanged = true;
 }

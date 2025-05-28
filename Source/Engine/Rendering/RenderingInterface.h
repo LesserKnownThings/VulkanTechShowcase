@@ -1,11 +1,11 @@
 #pragma once
 
 #include "AbstractData.h"
+#include "EngineName.h"
 #include "Material/Material.h"
 #include "Utilities/Delegate.h"
 
 #include <cstdint>
-#include <entt/entity/registry.hpp>
 #include <glm/glm.hpp>
 #include <SDL3/SDL_video.h>
 #include <string>
@@ -23,6 +23,7 @@ struct MeshData;
 struct MeshRenderData;
 struct TextureData;
 struct TextureRenderData;
+struct View;
 
 DECLARE_DELEGATE_TwoParams(OnWindowResizeParams, float, float);
 
@@ -35,12 +36,11 @@ public:
 	virtual void DrawFrame() = 0;
 	virtual void EndFrame() = 0;
 
-	virtual void DrawSingle(const std::vector<entt::entity>& entities, const entt::registry& registry) = 0;
-	virtual void DrawLight(const std::vector<entt::entity>& entities, const entt::registry& registry) = 0;
+	virtual void DrawSingle(const View& view) = 0;
 
 	// Material descriptors
 	virtual void AllocateMaterialDescriptorSet(EPipelineType pipeline, GenericHandle& outDescriptorSet) = 0;
-	virtual void UpdateMaterialDescriptorSet(EPipelineType pipeline, const std::unordered_map<std::string, DescriptorDataProvider>& dataProviders) = 0;
+	virtual void UpdateMaterialDescriptorSet(EPipelineType pipeline, const std::unordered_map<EngineName, DescriptorDataProvider>& dataProviders) = 0;
 	// *******************
 
 	/// Global descriptors
@@ -51,11 +51,6 @@ public:
 	virtual void AllocateLightDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, GenericHandle& outDescriptorSet) = 0;
 	virtual void DestroyDescriptorSetLayout(const DescriptorSetLayoutInfo& layoutInfo) = 0;
 	// *******************
-
-	// Setters
-	virtual void UpdateProjection(const glm::mat4& projection) = 0;
-	virtual void UpdateView(const glm::mat4& view) = 0;
-	//********
 
 	// Buffer manips
 	virtual void CreateMeshVertexBuffer(const MeshData& meshData, MeshRenderData& outRenderData) = 0;
@@ -78,6 +73,9 @@ public:
 	OnWindowResizeParams onWindowResizeParams;
 
 protected:
+	virtual void UpdateProjection(const glm::mat4& projection) = 0;
+	virtual void UpdateView(const glm::mat4& view) = 0;
+
 	virtual void HandleWindowResized();
 	virtual void HandleWindowMinimized() = 0;
 	void CreateDescriptorRegistry();

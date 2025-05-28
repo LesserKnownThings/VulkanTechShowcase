@@ -29,13 +29,7 @@ struct Transform
 	}
 };
 
-struct Material
-{
-	EPipelineType pipeline;
-	uint32_t materialInstanceHandle = 0;
-};
-
-struct Mesh
+struct ModelComponent
 {
 	uint32_t handle = 0;
 };

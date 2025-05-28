@@ -28,7 +28,7 @@ public:
 	// TODO specialized descriptor sets (like compute shader buffers)
 
 	virtual void AllocateMaterialDescriptorSet(GenericHandle& outDescriptorSet);
-	virtual void UpdateMaterialDescriptorSet(const std::unordered_map<std::string, DescriptorDataProvider>& dataProviders);
+	virtual void UpdateMaterialDescriptorSet(const std::unordered_map<EngineName, DescriptorDataProvider>& dataProviders);
 
 	virtual EPipelineType GetType() const = 0;
 
