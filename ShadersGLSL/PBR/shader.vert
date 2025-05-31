@@ -43,7 +43,7 @@ layout(push_constant, std430) uniform SharedConstants {
 } sharedConstants;
 
 void main() {
-    vec4 skinnedPosition = vec4(position, 1.0);
+    vec4 skinnedPosition = vec4(0.0);
     vec3 skinnedNormal = normal;
 
     if(sharedConstants.hasAnimation == 1) {
@@ -59,6 +59,9 @@ void main() {
             skinnedPosition += localPosition * weights[i];
             skinnedNormal = animation.boneNormals[boneIDS[i]] * normal;
         }
+    }
+    else {
+        skinnedPosition = vec4(position, 1.0);
     }
 
     vertexData.normal = normal;

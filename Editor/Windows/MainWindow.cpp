@@ -1,10 +1,13 @@
 #include "MainWindow.h"
+#include "SkeletonViewerWindow.h"
 
 #include <imgui/imgui.h>
 
 void MainWindow::Initialize()
 {
-
+	Window* skeletonViewer = new SkeletonViewerWindow();
+	skeletonViewer->Initialize();
+	windows.push_back(skeletonViewer);
 }
 
 void MainWindow::UnInitialize()

@@ -39,9 +39,6 @@ struct BoneInstance
 	int32_t numPositions;
 	int32_t numRotations;
 	int32_t numScales;
-
-	EngineName name;
-	int32_t id;
 };
 
 struct BoneInfo
@@ -50,10 +47,18 @@ struct BoneInfo
 	glm::mat4 offset;
 };
 
+struct BoneNode
+{
+	EngineName name;
+	glm::mat4 transform;
+	int32_t childrenCount;
+	std::vector<BoneNode> children;
+};
+
 struct SkeletonData
 {
-	std::unordered_map<EngineName, BoneInfo> boneInfoMap;
-	
 	int32_t boneInfoCount;
-	int32_t boneVerticesCount;
+
+	BoneNode rootBone;
+	std::unordered_map<EngineName, BoneInfo> boneInfoMap;	
 };

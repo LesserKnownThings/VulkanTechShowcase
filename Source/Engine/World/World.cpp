@@ -47,12 +47,40 @@ void World::Initialize()
 	};
 	Light dirLight = lightSystem->CreateLight(directionalLight, &dirLightData, ELightType::Directional);
 	registry.emplace<Light>(directionalLight, dirLight);
+
+	CreateCharacter();
+}
+
+void World::CreateCharacter()
+{
+	AssetManager& assetManager = AssetManager::Get();
+	RenderingInterface* renderingSystem = GameEngine->GetRenderingSystem();
+
+	uint32_t handles[3];
+	assetManager.QueryAssets(handles, "Animations\\Test", "Textures\\PolygonDarkFantasy_Texture_01_B", "Animations\\Dance");
+
+	Model* model = assetManager.LoadAsset<Model>(handles[0]);
+	const MeshData& mesh = model->GetMeshData();
+
+	AnimatorComponent anim = animationSystem->CreateAnimator(handles[2], { "Data\\Import\\Animations\\Dance.fbx" });
+
+
+	MaterialDescriptorBindingResource resource{};
+	resource.semantic = MaterialSemantics::Albedo;
+	resource.textureAssetHandle = handles[1];
+	renderingSystem->GetMaterialSystem()->SetTextures(mesh.materials[0].materialInstanceHandle, { resource });
+
+	entt::entity hero = registry.create();
+	registry.emplace<Transform>(hero, Transform{.scale = glm::vec3(0.25f)});
+	registry.emplace<ModelComponent>(hero, handles[0]);
+	registry.emplace<AnimatorComponent>(hero, anim);
 }
 
 void World::UnInitialize()
 {
 	delete animationSystem;
 	delete lightSystem;
+	delete cameraSystem;
 
 	TaskManager::Get().RemoveAllTasks(this);
 

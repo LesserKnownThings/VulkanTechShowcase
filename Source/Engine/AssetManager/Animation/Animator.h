@@ -21,7 +21,7 @@ public:
 	const std::array<AlignedMatrix3, MAX_BONES>& GetBoneNormals() const { return boneNormals; }
 
 private:
-	void CalculateBoneTransform(const AnimationNodeData& node, glm::mat4 parentTransform);
+	void CalculateBoneTransform(const BoneNode& node, glm::mat4 parentTransform, uint32_t& count);
 
 	float currentTime = 0.0f;
 

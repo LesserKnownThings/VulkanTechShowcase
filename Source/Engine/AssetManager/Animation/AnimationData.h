@@ -15,20 +15,11 @@ struct AnimationLayout
 	alignas(16) std::array<AlignedMatrix3, MAX_BONES> normals;
 };
 
-struct AnimationNodeData
-{
-	glm::mat4 transform;
-	EngineName name;
-	int32_t childrenCount;
-	std::vector<AnimationNodeData> children;
-};
-
 struct AnimationData
 {
 	int32_t ticksPerSecond;
 	float duration;
 
-	AnimationNodeData root;
 	std::unordered_map<EngineName, BoneInstance> boneInstanceMap;
 };
 

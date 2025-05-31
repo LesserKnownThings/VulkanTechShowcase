@@ -103,23 +103,6 @@ namespace Utilities
 		std::string test;
 	}
 
-	void ProcessMeshForSkeleton(aiNode* node, const aiScene* scene, SkeletonData& skeletonData)
-	{
-		for (size_t i = 0; i < node->mNumMeshes; ++i)
-		{
-			aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-			ExtractSkeletonFromModel(mesh, skeletonData);
-
-			// This will return when the first mesh is encountered, that's because the skeleton only supports 1 mesh per model
-			return;
-		}
-
-		for (size_t i = 0; i < node->mNumChildren; ++i)
-		{
-			ProcessMeshForSkeleton(node->mChildren[i], scene, skeletonData);
-		}
-	}
-
 	void MatchAnimationSkeletonBones(const aiAnimation* animation, const SkeletonData& skeletonData, AnimationData& animationData)
 	{
 		const int32_t size = animation->mNumChannels;
@@ -132,7 +115,8 @@ namespace Utilities
 			auto channel = animation->mChannels[i];
 			EngineName boneName = EngineName{ channel->mNodeName.C_Str() };
 
-			if (boneInfoMap.find(boneName) == boneInfoMap.end())
+			auto it = boneInfoMap.find(boneName);
+			if (it == boneInfoMap.end())
 			{
 #if WITH_EDITOR
 				std::cerr << "Missing bone: " << boneName.editorName << " in skeleton, will skip animation bone!" << std::endl;
@@ -179,20 +163,6 @@ namespace Utilities
 			}
 
 			animationData.boneInstanceMap[boneName] = bone;
-		}
-	}
-
-	void ReadBoneHierarchyData(const aiNode* src, AnimationNodeData& root)
-	{
-		root.name = EngineName{ src->mName.data };
-		root.transform = AssimpGLMHelpers::ConvertMatrixToGLMFormat(src->mTransformation);
-		root.childrenCount = src->mNumChildren;
-
-		for (int i = 0; i < src->mNumChildren; ++i)
-		{
-			AnimationNodeData newData{};
-			ReadBoneHierarchyData(src->mChildren[i], newData);
-			root.children.push_back(newData);
 		}
 	}
 
@@ -368,7 +338,10 @@ void MeshImporter::ImportSkeleton(const std::string& path, SkeletonData& outSkel
 		return;
 	}
 
-	Utilities::ProcessMeshForSkeleton(scene->mRootNode, scene, outSkeletonData);
+	ProcessMeshForSkeleton(scene->mRootNode, scene, outSkeletonData);
+
+	std::vector<glm::mat4> previousTransforms{};
+	ReadBoneHierarchyData(scene->mRootNode, outSkeletonData, outSkeletonData.rootBone, previousTransforms);
 }
 
 bool MeshImporter::ImportAnimation(const std::string& path, const SkeletonData& skeletonData, AnimationData& outAnimationData)
@@ -389,10 +362,73 @@ bool MeshImporter::ImportAnimation(const std::string& path, const SkeletonData& 
 		auto animation = scene->mAnimations[0];
 		outAnimationData.duration = animation->mDuration;
 		outAnimationData.ticksPerSecond = animation->mTicksPerSecond;
-		Utilities::ReadBoneHierarchyData(scene->mRootNode, outAnimationData.root);
 		Utilities::MatchAnimationSkeletonBones(animation, skeletonData, outAnimationData);
 		return true;
 	}
 
 	return false;
+}
+
+void MeshImporter::ProcessMeshForSkeleton(aiNode* node, const aiScene* scene, SkeletonData& skeletonData)
+{
+	for (size_t i = 0; i < node->mNumMeshes; ++i)
+	{
+		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+		Utilities::ExtractSkeletonFromModel(mesh, skeletonData);
+
+		// This will return when the first mesh is encountered, that's because the skeleton only supports 1 mesh per model
+		return;
+	}
+
+	for (size_t i = 0; i < node->mNumChildren; ++i)
+	{
+		ProcessMeshForSkeleton(node->mChildren[i], scene, skeletonData);
+	}
+}
+
+void MeshImporter::ReadTempHierarchyData(aiNode* src, const SkeletonData& skeletonData, BoneNode& root, std::vector<glm::mat4>& previousTrasforms)
+{
+	previousTrasforms.emplace_back(AssimpGLMHelpers::ConvertMatrixToGLMFormat(src->mTransformation));
+
+	for (int i = 0; i < src->mNumChildren; ++i)
+	{
+		std::string name = src->mChildren[i]->mName.C_Str();
+		if (name.find("Assimp") != std::string::npos)
+		{
+			ReadTempHierarchyData(src->mChildren[i], skeletonData, root, previousTrasforms);
+		}
+		else
+		{
+			BoneNode newData{};
+			ReadBoneHierarchyData(src->mChildren[i], skeletonData, newData, previousTrasforms);
+			root.children.push_back(newData);
+		}
+	}
+}
+
+void MeshImporter::ReadBoneHierarchyData(aiNode* src, const SkeletonData& skeletonData, BoneNode& root, std::vector<glm::mat4>& previousTrasforms)
+{
+	root.name = EngineName{ src->mName.C_Str() };
+	root.transform = AssimpGLMHelpers::ConvertMatrixToGLMFormat(src->mTransformation);	
+	for (const glm::mat4& transform : previousTrasforms)
+	{
+		root.transform *= transform;
+	}
+	previousTrasforms.clear();
+	root.childrenCount = src->mNumChildren;
+
+	for (int i = 0; i < src->mNumChildren; ++i)
+	{
+		std::string name = src->mChildren[i]->mName.C_Str();
+		if (name.find("Assimp") != std::string::npos)
+		{
+			ReadTempHierarchyData(src->mChildren[i], skeletonData, root, previousTrasforms);
+		}
+		else
+		{
+			BoneNode newData{};
+			ReadBoneHierarchyData(src->mChildren[i], skeletonData, newData, previousTrasforms);
+			root.children.push_back(newData);
+		}
+	}
 }

@@ -2,6 +2,8 @@
 #include "AnimationUtilities.h"
 #include "Skeleton.h"
 
+#include <iostream>
+
 void Animator::Initialize()
 {
 
@@ -21,11 +23,14 @@ void Animator::Run(float deltaTime)
 			currentAnimationIndex = fmod(currentAnimationIndex, animations.size());
 		}
 
-		CalculateBoneTransform(instance.animationData.root, glm::mat4(1.0f));
+		const SkeletonData& skeletonData = instance.skeleton->GetSkeletonData();
+		uint32_t count = 0;
+		CalculateBoneTransform(skeletonData.rootBone, glm::mat4(1.0f), count);
+		std::cout << count << std::endl;
 	}
 }
 
-void Animator::CalculateBoneTransform(const AnimationNodeData& node, glm::mat4 parentTransform)
+void Animator::CalculateBoneTransform(const BoneNode& node, glm::mat4 parentTransform, uint32_t& count)
 {
 	const AnimationInstance& instance = animations[currentAnimationIndex];
 
@@ -46,6 +51,7 @@ void Animator::CalculateBoneTransform(const AnimationNodeData& node, glm::mat4 p
 	auto boneInfoIT = boneInfoMap.find(node.name);
 	if (boneInfoIT != boneInfoMap.end())
 	{
+		count++;
 		int32_t index = boneInfoIT->second.id;
 		glm::mat4 offset = boneInfoIT->second.offset;
 		boneTransforms[index] = globalTransform * offset;
@@ -54,7 +60,7 @@ void Animator::CalculateBoneTransform(const AnimationNodeData& node, glm::mat4 p
 
 	for (int32_t i = 0; i < node.childrenCount; ++i)
 	{
-		CalculateBoneTransform(node.children[i], globalTransform);
+		CalculateBoneTransform(node.children[i], globalTransform, count);
 	}
 }
 

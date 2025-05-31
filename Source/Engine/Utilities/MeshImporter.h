@@ -1,9 +1,13 @@
 #pragma once
 
+#include <glm/glm.hpp>
 #include <string>
 #include <vector>
 
+struct aiNode;
+struct aiScene;
 struct AnimationData;
+struct BoneNode;
 struct SkeletonData;
 struct MeshData;
 
@@ -13,4 +17,9 @@ public:
 	static void ImportModel(const std::string& path, MeshData& outMeshData);
 	static void ImportSkeleton(const std::string& path, SkeletonData& outSkeletonData);
 	static bool ImportAnimation(const std::string& path, const SkeletonData& skeletonData, AnimationData& outAnimationData);
+
+private:
+	static void ProcessMeshForSkeleton(aiNode* node, const aiScene* scene, SkeletonData& skeletonData);
+	static void ReadTempHierarchyData(aiNode* src, const SkeletonData& skeletonData, BoneNode& root, std::vector<glm::mat4>& previousTrasforms);
+	static void ReadBoneHierarchyData(aiNode* src, const SkeletonData& skeletonData, BoneNode& root, std::vector<glm::mat4>& previousTrasforms);
 };

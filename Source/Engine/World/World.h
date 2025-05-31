@@ -31,6 +31,8 @@ protected:
 	entt::registry registry;
 
 private:
+	void CreateCharacter();
+
 	void HandleCameraMovement(float deltaTime);
 	void HandleCameraLook(float deltaTime);
 
