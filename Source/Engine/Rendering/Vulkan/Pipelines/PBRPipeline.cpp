@@ -1,4 +1,5 @@
 #include "PBRPipeline.h"
+#include "AssetManager/Animation/BoneData.h"
 #include "AssetManager/Model/MeshData.h"
 #include "Rendering/Descriptors/DescriptorRegistry.h"
 #include "Rendering/Light/Light.h"
@@ -7,27 +8,30 @@
 #include "Rendering/Vulkan/PushConstant.h"
 #include "Rendering/Vulkan/RenderUtilities.h"
 
+#include <array>
 #include <cstdint>
 #include <iostream>
 
 std::vector<VkPushConstantRange> PBRPipeline::GetPipelinePushConstants()
 {
-	std::vector<VkPushConstantRange> pushConstants(2);
+	std::vector<VkPushConstantRange> pushConstants(1);
 
 	pushConstants[0].offset = 0;
-	pushConstants[0].size = sizeof(EntityTransformModel);
-	pushConstants[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-	pushConstants[1].offset = sizeof(EntityTransformModel);
-	pushConstants[1].size = sizeof(LightConstant);
-	pushConstants[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	pushConstants[0].size = sizeof(SharedConstant);
+	pushConstants[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	return pushConstants;
 }
 
 bool PBRPipeline::CreateVertexSpecializationInfo(VkSpecializationInfo& outInfo)
 {
-	return false;
+	uint32_t data[2] =
+	{
+		MAX_BONES,
+		MAX_BONE_INFLUENCE
+	};
+	outInfo.pData = data;
+	return true;
 }
 
 bool PBRPipeline::CreateFragmentSpecializationInfo(VkSpecializationInfo& outInfo)
@@ -45,7 +49,23 @@ bool PBRPipeline::CreateFragmentSpecializationInfo(VkSpecializationInfo& outInfo
 
 std::vector<VkSpecializationMapEntry> PBRPipeline::CreateVertexSpecializationMap(size_t& dataSize)
 {
-	return {};
+	std::vector<VkSpecializationMapEntry> map =
+	{
+		VkSpecializationMapEntry
+		{
+			.constantID = 0,
+			.offset = 0,
+			.size = sizeof(uint32_t)
+		},
+		VkSpecializationMapEntry
+		{
+			.constantID = 1,
+			.offset = sizeof(uint32_t),
+			.size = sizeof(uint32_t)
+		},
+	};
+	dataSize = map.size();
+	return map;
 }
 
 std::vector<VkSpecializationMapEntry> PBRPipeline::CreateFragmentSpecializationMap(size_t& dataSize)
@@ -82,14 +102,14 @@ std::vector<VkSpecializationMapEntry> PBRPipeline::CreateFragmentSpecializationM
 	return map;
 }
 
-void PBRPipeline::CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& vertexInputInfo)
+void PBRPipeline::CreateVertexInputInfo(std::vector<VkVertexInputBindingDescription>& bindingDescriptions, std::vector<VkVertexInputAttributeDescription>& attributeDescriptions)
 {
-	VkVertexInputBindingDescription* bindingDescription = new VkVertexInputBindingDescription[1];
-	VkVertexInputAttributeDescription* attributeDescriptions = new VkVertexInputAttributeDescription[5];
+	bindingDescriptions.resize(1);
+	attributeDescriptions.resize(7);
 
-	bindingDescription[0].binding = 0;
-	bindingDescription[0].stride = sizeof(Vertex);
-	bindingDescription[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+	bindingDescriptions[0].binding = 0;
+	bindingDescriptions[0].stride = sizeof(Vertex);
+	bindingDescriptions[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
 	attributeDescriptions[0].binding = 0;
 	attributeDescriptions[0].location = 0;
@@ -116,11 +136,15 @@ void PBRPipeline::CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& ve
 	attributeDescriptions[4].format = VK_FORMAT_R32G32_SFLOAT;
 	attributeDescriptions[4].offset = offsetof(Vertex, uv);
 
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.pVertexBindingDescriptions = bindingDescription;
+	attributeDescriptions[5].binding = 0;
+	attributeDescriptions[5].location = 5;
+	attributeDescriptions[5].format = VK_FORMAT_R32G32B32A32_SINT;
+	attributeDescriptions[5].offset = offsetof(Vertex, boneIDs);
 
-	vertexInputInfo.vertexAttributeDescriptionCount = 5;
-	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions;
+	attributeDescriptions[6].binding = 0;
+	attributeDescriptions[6].location = 6;
+	attributeDescriptions[6].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	attributeDescriptions[6].offset = offsetof(Vertex, weights);
 }
 
 void PBRPipeline::CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSetLayout>& outDescriptorSetLayouts)
@@ -128,13 +152,15 @@ void PBRPipeline::CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSet
 	// The order in which the layouts are pushed matters
 	if (const DescriptorRegistry* registry = renderingInterface->GetDescriptorRegistry())
 	{
-		VkDescriptorSetLayout globalLayout = RenderUtilities::GenericHandleToDescriptorSetLayout(registry->GetGlobalLayout().layout);
+		VkDescriptorSetLayout cameraMatricesLayout = RenderUtilities::GenericHandleToDescriptorSetLayout(registry->GetGlobalLayout().layout);
 		VkDescriptorSetLayout lightLayout = RenderUtilities::GenericHandleToDescriptorSetLayout(registry->GetLightLayout().layout);
+		VkDescriptorSetLayout animationLayout = RenderUtilities::GenericHandleToDescriptorSetLayout(registry->GetAnimationLayout().layout);
 
-		outDescriptorSetLayouts.push_back(globalLayout);
+		outDescriptorSetLayouts.push_back(cameraMatricesLayout);
 		outDescriptorSetLayouts.push_back(lightLayout);
+		outDescriptorSetLayouts.push_back(animationLayout);
 
-		flags = MATRICES_DESCRIPTOR_FLAG | LIGHT_DESCRIPTOR_FLAG;
+		flags = MATRICES_DESCRIPTOR_FLAG | LIGHT_DESCRIPTOR_FLAG | ANIMATION_DESCRIPTOR_FLAG;
 	}
 
 	std::array<VkDescriptorSetLayoutBinding, 1> uboLayoutBinding = {};
@@ -167,7 +193,7 @@ void PBRPipeline::CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSet
 	materialLayout = DescriptorSetLayoutInfo
 	{
 		RenderUtilities::DescriptorSetLayoutToGenericHandle(samplerLayout),
-		2,
+		3,
 		EDescriptorOwner::Material
 	};
 }

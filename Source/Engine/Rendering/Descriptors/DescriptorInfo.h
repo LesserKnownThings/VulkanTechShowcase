@@ -9,6 +9,7 @@
 
 constexpr uint32_t MATRICES_DESCRIPTOR_FLAG = 1 << 0;
 constexpr uint32_t LIGHT_DESCRIPTOR_FLAG = 1 << 1;
+constexpr uint32_t ANIMATION_DESCRIPTOR_FLAG = 1 << 2;
 
 enum class EDescriptorOwner : uint8_t
 {

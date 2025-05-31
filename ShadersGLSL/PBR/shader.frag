@@ -6,7 +6,7 @@ layout (constant_id = 2) const uint LIGHT_TYPE_POINT = 1 << 1;
 layout (constant_id = 3) const uint LIGHT_TYPE_SPOT = 1 << 2;
 
 layout(location = 0) out vec4 fragColor;
-layout(set = 2, binding = 0) uniform sampler2D albedo;
+layout(set = 3, binding = 0) uniform sampler2D albedo;
 
 // Material Data
 
@@ -20,14 +20,16 @@ layout(location = 0) in VertexData {
     vec2 uv;
 } vertexData;
 
-layout(push_constant, std430) uniform LightConstants {
+layout(push_constant, std430) uniform SharedConstants {
+    mat4 model;
     // The col a contains the position of the view
-    layout(offset = 64) vec4 col0;
+    vec4 col0;
     vec4 col1;
     vec4 col2;
     int lightsCount;
     float ambientStrength;
-} lightConstants;
+    uint hasAnimation;
+} sharedConstants;
 
 struct Light {
     // w => type (needs to be converted from float bits to uint)
@@ -126,12 +128,12 @@ vec3 CalculateSpotLight(Light light, mat3 normalMatrix, vec3 viewPosition, vec3 
 
 void main() {
     vec4 finalColor = texture(albedo, vertexData.uv);
-    vec3 result = finalColor.xyz * lightConstants.ambientStrength;
+    vec3 result = finalColor.xyz * sharedConstants.ambientStrength;
 
-    mat3 normalMatrix = mat3(lightConstants.col0.xyz, lightConstants.col1.xyz, lightConstants.col2.xyz);
-    vec3 viewPosition = vec3(lightConstants.col0.w, lightConstants.col1.w, lightConstants.col2.w);;
+    mat3 normalMatrix = mat3(sharedConstants.col0.xyz, sharedConstants.col1.xyz, sharedConstants.col2.xyz);
+    vec3 viewPosition = vec3(sharedConstants.col0.w, sharedConstants.col1.w, sharedConstants.col2.w);;
 
-    for(int i = 0; i < lightConstants.lightsCount; ++i) {
+    for(int i = 0; i < sharedConstants.lightsCount; ++i) {
         uint lightType = floatBitsToUint(lightData.lights[i].position.w);
         if((lightType & LIGHT_TYPE_DIRECTIONAL) != 0) {
             result += CalculateDirectionalLight(lightData.lights[i], normalMatrix, viewPosition, finalColor.xyz);

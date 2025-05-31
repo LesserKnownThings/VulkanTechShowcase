@@ -25,7 +25,22 @@ struct TextureData;
 struct TextureRenderData;
 struct View;
 
+DECLARE_DELEGATE(OnRenderFrameReset);
 DECLARE_DELEGATE_TwoParams(OnWindowResizeParams, float, float);
+
+enum class EBufferType
+{
+	Uniform,
+	Storage
+};
+
+enum class EDescriptorSetType
+{
+	Uniform,
+	UniformDynamic,
+	Storage,
+	StorageDynamic
+};
 
 class RenderingInterface
 {
@@ -44,11 +59,12 @@ public:
 	// *******************
 
 	/// Global descriptors
-	virtual void CreateGlobalUniformBuffers(std::array<AllocatedBuffer, MAX_FRAMES_IN_FLIGHT>& buffers) = 0;
-	virtual void CreateLightBuffer(AllocatedBuffer& outBuffer) = 0;
-	virtual void CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& globalLayout, DescriptorSetLayoutInfo& lightLayout) = 0;
-	virtual void AllocateGlobalDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, std::array<GenericHandle, MAX_FRAMES_IN_FLIGHT>& outDescriptorSets) = 0;
-	virtual void AllocateLightDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, GenericHandle& outDescriptorSet) = 0;
+	virtual void CreateBuffer(EBufferType bufferType, uint32_t size, AllocatedBuffer& outBuffer) = 0;
+	virtual void CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& cameraMatricesLayout, DescriptorSetLayoutInfo& lightLayout, DescriptorSetLayoutInfo& animationLayout) = 0;
+	virtual void CreateDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, GenericHandle& outDescriptorSet) = 0;
+
+	virtual void UpdateDescriptorSet(EDescriptorSetType type, GenericHandle descriptorSet, AllocatedBuffer buffer) = 0;
+	virtual void UpdateDynamicDescriptorSet(EDescriptorSetType type, GenericHandle descriptorSet, AllocatedBuffer buffer, uint32_t binding, uint32_t offset, uint32_t range) = 0;
 	virtual void DestroyDescriptorSetLayout(const DescriptorSetLayoutInfo& layoutInfo) = 0;
 	// *******************
 
@@ -71,6 +87,7 @@ public:
 	MaterialSystem* GetMaterialSystem() const { return materialSystem; }
 
 	OnWindowResizeParams onWindowResizeParams;
+	OnRenderFrameReset onRenderFrameReset;
 
 protected:
 	virtual void UpdateProjection(const glm::mat4& projection) = 0;

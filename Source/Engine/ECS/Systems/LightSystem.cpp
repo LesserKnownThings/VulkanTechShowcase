@@ -27,7 +27,7 @@ Light LightSystem::CreateLight(const entt::entity& entity, CommonLightData* ligh
 
 Light LightSystem::CreateDirectionalLight(const entt::entity& entity, CommonLightData* data)
 {
-	uint32_t currentID = GenerateLightHandle();
+	uint32_t currentID = GenerateHandle();
 
 	if (auto transform = registry.try_get<Transform>(entity))
 	{
@@ -50,7 +50,7 @@ Light LightSystem::CreateDirectionalLight(const entt::entity& entity, CommonLigh
 
 Light LightSystem::CreatePointLight(const entt::entity& entity, PointLightData* data)
 {
-	uint32_t currentID = GenerateLightHandle();
+	uint32_t currentID = GenerateHandle();
 
 	if (auto transform = registry.try_get<Transform>(entity))
 	{
@@ -74,7 +74,7 @@ Light LightSystem::CreatePointLight(const entt::entity& entity, PointLightData* 
 
 Light LightSystem::CreateSpotLight(const entt::entity& entity, SpotLightData* data)
 {
-	uint32_t currentID = GenerateLightHandle();
+	uint32_t currentID = GenerateHandle();
 
 	if (auto transform = registry.try_get<Transform>(entity))
 	{
@@ -154,21 +154,4 @@ void LightSystem::UpdateLightBuffer(uint32_t index, const LightInstance& lightIn
 
 	LightBufferLayout data = lightInstance.CreateBufferLayout();
 	renderingInterface->UpdateBuffer(lightBuffer, sizeof(LightBufferLayout) * index, sizeof(LightBufferLayout), &data);
-}
-
-uint32_t LightSystem::GenerateLightHandle()
-{
-	uint32_t currentID = 0;
-	if (!freeHandles.empty())
-	{
-		currentID = freeHandles.front();
-		freeHandles.pop();
-		lightsCount++;
-	}
-	else
-	{
-		// TODO add a check for max light count reached
-		currentID = lightsCount++;
-	}
-	return currentID;
 }

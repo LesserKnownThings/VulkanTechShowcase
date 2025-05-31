@@ -38,3 +38,8 @@ struct Light
 {
 	uint32_t lightInstanceHandle = 0;
 };
+
+struct AnimatorComponent
+{
+	uint32_t animatorInstanceHandle = 0;
+};

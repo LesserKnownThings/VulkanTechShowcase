@@ -2,13 +2,15 @@
 
 #include <cstdint>
 #include <entt/entt.hpp>
+#include <glm/glm.hpp>
 #include <unordered_map>
 #include <vector>
 
-#include <glm/glm.hpp>
-
-class Camera;
+class AnimationSystem;
+class CameraSystem;
 class LightSystem;
+
+struct Camera;
 
 class World
 {
@@ -20,7 +22,10 @@ protected:
 	virtual void Draw();
 	virtual void Tick(float deltaTime);
 
-	Camera* camera = nullptr;
+	Camera* mainCam = nullptr;
+
+	AnimationSystem* animationSystem = nullptr;
+	CameraSystem* cameraSystem = nullptr;
 	LightSystem* lightSystem = nullptr;
 
 	entt::registry registry;

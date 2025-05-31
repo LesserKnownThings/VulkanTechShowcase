@@ -5,9 +5,24 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if (NOT DEFINED WITH_EDITOR)
+    set(WITH_EDITOR 0)
+endif()
+
 set(GLOBAL_SOURCES "")
 file(GLOB_RECURSE SOURCES "${CMAKE_SOURCE_DIR}/Source/*.cpp")
 list(APPEND GLOBAL_SOURCES ${SOURCES})
+
+set(GLOBAL_HEADERS "")
+file(GLOB_RECURSE HEADERS "${CMAKE_SOURCE_DIR}/Source/*.h")
+list(APPEND GLOBAL_HEADERS ${HEADERS})
+
+if(WITH_EDITOR EQUAL 1)
+   file(GLOB_RECURSE EDITOR_SOURCES "${CMAKE_SOURCE_DIR}/Editor/*.cpp")
+   file(GLOB_RECURSE EDITOR_HEADERS "${CMAKE_SOURCE_DIR}/Editor/*.h")
+   list(APPEND GLOBAL_SOURCES ${EDITOR_SOURCES})
+   list(APPEND GLOBAL_HEADERS ${EDITOR_HEADERS})
+endif()
 
 #Look for third party libs
 add_compile_definitions(VK_NO_PROTOTYPES)
@@ -20,6 +35,8 @@ find_package(entt CONFIG REQUIRED)
 ##########################
 
 add_executable(VulkanTechShowcase ${GLOBAL_SOURCES})
+
+target_compile_definitions(VulkanTechShowcase PRIVATE WITH_EDITOR=${WITH_EDITOR})
 
 #Link third party libs
 target_link_libraries(VulkanTechShowcase
@@ -39,9 +56,11 @@ target_include_directories(VulkanTechShowcase PRIVATE
     ${CMAKE_SOURCE_DIR}/Source/Engine
 )
 
-set(GLOBAL_HEADERS "")
-file(GLOB_RECURSE HEADERS "${CMAKE_SOURCE_DIR}/Source/*.h")
-list(APPEND GLOBAL_HEADERS ${HEADERS})
+if(WITH_EDITOR EQUAL 1)
+    target_include_directories(VulkanTechShowcase PRIVATE
+    ${CMAKE_SOURCE_DIR}/Editor
+    )
+endif()
 
 target_include_directories(VulkanTechShowcase PUBLIC ${GLOBAL_HEADERS})
 

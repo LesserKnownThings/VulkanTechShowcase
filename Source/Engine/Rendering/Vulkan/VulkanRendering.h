@@ -14,6 +14,10 @@
 
 class RenderPipeline;
 
+#if WITH_EDITOR
+class EditorUI;
+#endif
+
 struct MeshData;
 struct MeshRenderData;
 
@@ -46,17 +50,20 @@ public:
 	void DrawSingle(const View& view) override;
 	void EndFrame() override;
 
+	const VkContext& GetContext() const { return context; }
+	VkCommandBuffer GetCurrentCommandBuffer() const;
+
 	// Material descriptors
 	void AllocateMaterialDescriptorSet(EPipelineType pipeline, GenericHandle& outDescriptorSet) override;
 	void UpdateMaterialDescriptorSet(EPipelineType pipeline, const std::unordered_map<EngineName, DescriptorDataProvider>& dataProviders) override;
 	// *******************
 
 	/// Global descriptors
-	void CreateGlobalUniformBuffers(std::array<AllocatedBuffer, MAX_FRAMES_IN_FLIGHT>& buffers) override;
-	void CreateLightBuffer(AllocatedBuffer& outBuffer) override;
-	void CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& globalLayout, DescriptorSetLayoutInfo& lightLayout) override;
-	void AllocateGlobalDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, std::array<GenericHandle, MAX_FRAMES_IN_FLIGHT>& outDescriptorSets) override;
-	void AllocateLightDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, GenericHandle& outDescriptorSet) override;
+	void CreateBuffer(EBufferType bufferType, uint32_t size, AllocatedBuffer& outBuffer) override;
+	void CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& cameraMatricesLayout, DescriptorSetLayoutInfo& lightLayout, DescriptorSetLayoutInfo& animationLayout) override;
+	void CreateDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, GenericHandle& outDescriptorSet) override;
+	void UpdateDescriptorSet(EDescriptorSetType type, GenericHandle descriptorSet, AllocatedBuffer buffer) override;
+	void UpdateDynamicDescriptorSet(EDescriptorSetType type, GenericHandle descriptorSet, AllocatedBuffer buffer, uint32_t binding, uint32_t offset, uint32_t range) override;
 	void DestroyDescriptorSetLayout(const DescriptorSetLayoutInfo& layoutInfo) override;
 	// *******************
 
@@ -167,6 +174,10 @@ private:
 	{
 	"VK_LAYER_KHRONOS_validation"
 	};
+
+#if WITH_EDITOR
+	EditorUI* editorUI = nullptr;
+#endif
 
 #ifdef NDEBUG
 	const bool enableValidationLayers = false;

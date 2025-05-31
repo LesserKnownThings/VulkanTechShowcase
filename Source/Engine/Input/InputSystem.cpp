@@ -6,6 +6,10 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
 
+#if WITH_EDITOR
+#include <imgui/imgui_impl_sdl3.h>
+#endif
+
 InputSystem::~InputSystem()
 {
 }

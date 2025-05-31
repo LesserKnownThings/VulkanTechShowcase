@@ -1,5 +1,7 @@
 #pragma once
 
+#include "AssetManager/Animation/BoneData.h"
+
 #include <cstdint>
 #include <glm/glm.hpp>
 
@@ -10,6 +12,8 @@ struct Vertex
 	glm::vec3 tangent;
 	glm::vec3 biTangent;
 	glm::vec2 uv;
+	int32_t boneIDs[MAX_BONE_INFLUENCE]{ -1, -1, -1, -1 };
+	float weights[MAX_BONE_INFLUENCE];
 };
 
 struct MeshIndexData
@@ -31,7 +35,7 @@ struct MeshData
 	uint32_t meshesCount = 0;
 
 	std::vector<MeshIndexData> meshIndices;
-	std::vector<size_t> offset;	
+	std::vector<size_t> offset;
 	std::vector<Vertex> vertices;
 	std::vector<Material> materials;
 };

@@ -1,18 +1,60 @@
 #include "MeshImporter.h"
+#include "AssetManager/Animation/AnimationData.h"
+#include "AssetManager/Animation/BoneData.h"
 #include "AssetManager/Model/MeshData.h"
 #include "Engine.h"
+#include "EngineName.h"
 #include "ECS/Systems/MaterialSystem.h"
 #include "Rendering/RenderingInterface.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
+#include <cassert>
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <iostream>
 #include <limits>
 
+namespace AssimpGLMHelpers
+{
+	static inline glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from)
+	{
+		glm::mat4 to;
+		// the a,b,c,d in assimp is the row ; the 1,2,3,4 is the column
+		to[0][0] = from.a1;
+		to[1][0] = from.a2;
+		to[2][0] = from.a3;
+		to[3][0] = from.a4;
+		to[0][1] = from.b1;
+		to[1][1] = from.b2;
+		to[2][1] = from.b3;
+		to[3][1] = from.b4;
+		to[0][2] = from.c1;
+		to[1][2] = from.c2;
+		to[2][2] = from.c3;
+		to[3][2] = from.c4;
+		to[0][3] = from.d1;
+		to[1][3] = from.d2;
+		to[2][3] = from.d3;
+		to[3][3] = from.d4;
+		return to;
+	}
+
+	static inline glm::vec3 GetGLMVec(const aiVector3D& vec)
+	{
+		return glm::vec3(vec.x, vec.y, vec.z);
+	}
+
+	static inline glm::quat GetGLMQuat(const aiQuaternion& pOrientation)
+	{
+		return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
+	}
+}
+
 namespace Utilities
 {
+	// TODO remove this? I don't I'll use it?
 	// Since imported elements from Blender have a 2x2 space need to normalize them to 1x1
 	void NormalizeVertices(MeshData& meshData)
 	{
@@ -40,7 +82,121 @@ namespace Utilities
 		}
 	}
 
-	void ProcessMesh(aiMesh* assimpMesh, const std::string& path, MeshData& outMeshData, size_t vertexOffset, size_t& globalIndexOffset)
+	void ExtractSkeletonFromModel(aiMesh* mesh, SkeletonData& skeletonData)
+	{
+		for (int32_t boneIndex = 0; boneIndex < mesh->mNumBones; ++boneIndex)
+		{
+			std::string boneName = mesh->mBones[boneIndex]->mName.C_Str();
+
+			EngineName eBoneName{ boneName };
+
+			auto it = skeletonData.boneInfoMap.find(eBoneName);
+			if (it == skeletonData.boneInfoMap.end())
+			{
+				BoneInfo newBone{};
+				newBone.id = skeletonData.boneInfoCount++;
+				newBone.offset = AssimpGLMHelpers::ConvertMatrixToGLMFormat(mesh->mBones[boneIndex]->mOffsetMatrix);
+				skeletonData.boneInfoMap.emplace(boneName, newBone);
+			}
+		}
+
+		std::string test;
+	}
+
+	void ProcessMeshForSkeleton(aiNode* node, const aiScene* scene, SkeletonData& skeletonData)
+	{
+		for (size_t i = 0; i < node->mNumMeshes; ++i)
+		{
+			aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+			ExtractSkeletonFromModel(mesh, skeletonData);
+
+			// This will return when the first mesh is encountered, that's because the skeleton only supports 1 mesh per model
+			return;
+		}
+
+		for (size_t i = 0; i < node->mNumChildren; ++i)
+		{
+			ProcessMeshForSkeleton(node->mChildren[i], scene, skeletonData);
+		}
+	}
+
+	void MatchAnimationSkeletonBones(const aiAnimation* animation, const SkeletonData& skeletonData, AnimationData& animationData)
+	{
+		const int32_t size = animation->mNumChannels;
+
+		const auto& boneInfoMap = skeletonData.boneInfoMap;
+		const int32_t boneInfoCount = skeletonData.boneInfoCount;
+
+		for (int32_t i = 0; i < size; ++i)
+		{
+			auto channel = animation->mChannels[i];
+			EngineName boneName = EngineName{ channel->mNodeName.C_Str() };
+
+			if (boneInfoMap.find(boneName) == boneInfoMap.end())
+			{
+#if WITH_EDITOR
+				std::cerr << "Missing bone: " << boneName.editorName << " in skeleton, will skip animation bone!" << std::endl;
+#endif
+				continue;
+			}
+
+			BoneInstance bone{};
+
+			bone.numPositions = channel->mNumPositionKeys;
+			for (int32_t j = 0; j < bone.numPositions; ++j)
+			{
+				bone.positions.emplace_back(
+					KeyPosition
+					{
+						AssimpGLMHelpers::GetGLMVec(channel->mPositionKeys[j].mValue),
+						static_cast<float>(channel->mPositionKeys[j].mTime)
+					}
+				);
+			}
+
+			bone.numRotations = channel->mNumRotationKeys;
+			for (int32_t j = 0; j < bone.numRotations; ++j)
+			{
+				bone.rotations.emplace_back(
+					KeyRotation
+					{
+						AssimpGLMHelpers::GetGLMQuat(channel->mRotationKeys[j].mValue),
+						static_cast<float>(channel->mPositionKeys[j].mTime)
+					}
+				);
+			}
+
+			bone.numScales = channel->mNumScalingKeys;
+			for (int32_t j = 0; j < bone.numScales; ++j)
+			{
+				bone.scales.emplace_back(
+					KeyScale
+					{
+						AssimpGLMHelpers::GetGLMVec(channel->mScalingKeys[j].mValue),
+						static_cast<float>(channel->mScalingKeys[j].mTime)
+					}
+				);
+			}
+
+			animationData.boneInstanceMap[boneName] = bone;
+		}
+	}
+
+	void ReadBoneHierarchyData(const aiNode* src, AnimationNodeData& root)
+	{
+		root.name = EngineName{ src->mName.data };
+		root.transform = AssimpGLMHelpers::ConvertMatrixToGLMFormat(src->mTransformation);
+		root.childrenCount = src->mNumChildren;
+
+		for (int i = 0; i < src->mNumChildren; ++i)
+		{
+			AnimationNodeData newData{};
+			ReadBoneHierarchyData(src->mChildren[i], newData);
+			root.children.push_back(newData);
+		}
+	}
+
+	void ProcessMesh(aiMesh* assimpMesh, MeshData& outMeshData, size_t vertexOffset, size_t& globalIndexOffset)
 	{
 		for (size_t i = 0; i < assimpMesh->mNumVertices; i++)
 		{
@@ -96,9 +252,52 @@ namespace Utilities
 		outMeshData.meshIndices.push_back(meshIndexData);
 		outMeshData.indicesCount += meshIndexData.count;
 		globalIndexOffset += meshIndexData.count;
+
+
+		std::unordered_map<EngineName, uint32_t> bonesMap;
+		uint32_t boneCount = 0;
+		for (int32_t boneIndex = 0; boneIndex < assimpMesh->mNumBones; ++boneIndex)
+		{
+			int32_t boneID = -1;
+			std::string boneName = assimpMesh->mBones[boneIndex]->mName.C_Str();
+
+			EngineName eBoneName{ boneName };
+
+			auto it = bonesMap.find(eBoneName);
+			if (it == bonesMap.end())
+			{
+				boneID = boneCount++;
+				bonesMap.emplace(boneName, boneID);
+			}
+			else
+			{
+				boneID = it->second;
+			}
+
+			aiVertexWeight* weights = assimpMesh->mBones[boneIndex]->mWeights;
+			int32_t numWeights = assimpMesh->mBones[boneIndex]->mNumWeights;
+
+			for (int32_t weightIndex = 0; weightIndex < numWeights; ++weightIndex)
+			{
+				int32_t vertexId = weights[weightIndex].mVertexId;
+				float weight = weights[weightIndex].mWeight;
+
+				for (int32_t i = 0; i < MAX_BONE_INFLUENCE; ++i)
+				{
+					if (outMeshData.vertices[vertexId].boneIDs[i] < 0)
+					{
+						outMeshData.vertices[vertexId].boneIDs[i] = boneID;
+						outMeshData.vertices[vertexId].weights[i] = weight;
+						break;
+					}
+				}
+			}
+		}
+
+		std::string test;
 	}
 
-	void ProcessNodeForModel(aiNode* node, const aiScene* scene, const std::string& path, MeshData& meshData, size_t& globalVertexOffset, size_t& globalIndexOffset)
+	void ProcessNodeForModel(aiNode* node, const aiScene* scene, MeshData& meshData, size_t& globalVertexOffset, size_t& globalIndexOffset)
 	{
 		for (size_t i = 0; i < node->mNumMeshes; ++i)
 		{
@@ -107,7 +306,7 @@ namespace Utilities
 			meshData.offset.push_back(globalIndexOffset);
 			meshData.meshesCount++;
 
-			ProcessMesh(mesh, path, meshData, globalVertexOffset, globalIndexOffset);
+			ProcessMesh(mesh, meshData, globalVertexOffset, globalIndexOffset);
 
 			/*
 			* Supporting materials from the mesh is very frustrating especially when a lot of people don't
@@ -126,16 +325,16 @@ namespace Utilities
 
 		for (size_t i = 0; i < node->mNumChildren; ++i)
 		{
-			ProcessNodeForModel(node->mChildren[i], scene, path, meshData, globalVertexOffset, globalIndexOffset);
+			ProcessNodeForModel(node->mChildren[i], scene, meshData, globalVertexOffset, globalIndexOffset);
 		}
 	}
 
-	void ProcessNodeForModel(aiNode* node, const aiScene* scene, const std::string& path, MeshData& meshData)
+	void ProcessNodeForModel(aiNode* node, const aiScene* scene, MeshData& meshData)
 	{
 		size_t globalVertexOffset = 0;
 		size_t globalIndexOffset = 0;
 
-		ProcessNodeForModel(node, scene, path, meshData, globalVertexOffset, globalIndexOffset);
+		ProcessNodeForModel(node, scene, meshData, globalVertexOffset, globalIndexOffset);
 	}
 }
 
@@ -146,8 +345,7 @@ void MeshImporter::ImportModel(const std::string& path, MeshData& outMeshData)
 		aiProcess_Triangulate
 		| aiProcess_GenSmoothNormals
 		| aiProcess_FlipUVs
-		| aiProcess_CalcTangentSpace
-		| aiProcess_JoinIdenticalVertices);
+		| aiProcess_CalcTangentSpace);
 
 	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
 	{
@@ -155,5 +353,46 @@ void MeshImporter::ImportModel(const std::string& path, MeshData& outMeshData)
 		return;
 	}
 
-	Utilities::ProcessNodeForModel(scene->mRootNode, scene, path, outMeshData);
+	Utilities::ProcessNodeForModel(scene->mRootNode, scene, outMeshData);
+}
+
+void MeshImporter::ImportSkeleton(const std::string& path, SkeletonData& outSkeletonData)
+{
+	Assimp::Importer import;
+	const aiScene * scene = import.ReadFile(path,
+		aiProcess_Triangulate);
+
+	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+	{
+		std::cout << "ERROR::ASSIMP::" << import.GetErrorString() << std::endl;
+		return;
+	}
+
+	Utilities::ProcessMeshForSkeleton(scene->mRootNode, scene, outSkeletonData);
+}
+
+bool MeshImporter::ImportAnimation(const std::string& path, const SkeletonData& skeletonData, AnimationData& outAnimationData)
+{
+	Assimp::Importer import;
+	const aiScene * scene = import.ReadFile(path,
+		aiProcess_Triangulate);
+
+	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+	{
+		std::cout << "ERROR::ASSIMP::" << import.GetErrorString() << std::endl;
+		return false;
+	}
+
+	// Only supporting 1 animtion per import
+	if (scene->mNumAnimations > 0)
+	{
+		auto animation = scene->mAnimations[0];
+		outAnimationData.duration = animation->mDuration;
+		outAnimationData.ticksPerSecond = animation->mTicksPerSecond;
+		Utilities::ReadBoneHierarchyData(scene->mRootNode, outAnimationData.root);
+		Utilities::MatchAnimationSkeletonBones(animation, skeletonData, outAnimationData);
+		return true;
+	}
+
+	return false;
 }

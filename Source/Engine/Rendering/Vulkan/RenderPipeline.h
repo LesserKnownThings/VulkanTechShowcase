@@ -38,6 +38,7 @@ public:
 
 	bool SupportsCamera() const;
 	bool SupportsLight() const;
+	bool SupportsAnimations() const;
 
 	const DescriptorSetLayoutInfo& GetMaterialLayout() const { return materialLayout; }
 
@@ -47,7 +48,7 @@ protected:
 	virtual bool CreateFragmentSpecializationInfo(VkSpecializationInfo& outInfo) = 0;
 	virtual std::vector<VkSpecializationMapEntry> CreateFragmentSpecializationMap(size_t& dataSize) = 0;
 
-	virtual void CreateVertexInputInfo(VkPipelineVertexInputStateCreateInfo& vertexInputInfo) = 0;
+	virtual void CreateVertexInputInfo(std::vector<VkVertexInputBindingDescription>& bindingDescriptions, std::vector<VkVertexInputAttributeDescription>& attributeDescriptions) = 0;
 	virtual void CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSetLayout>& outDescriptorSetLayouts) = 0;
 	virtual std::vector<VkPushConstantRange> GetPipelinePushConstants() = 0;
 

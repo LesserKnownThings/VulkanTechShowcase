@@ -56,6 +56,16 @@ public:
 		
 	void ReleaseAsset(uint32_t handle);
 
+	/*
+	* TODO the asset manager currently has an issue. The same handle can be used for
+	* different asset types. This doesn't sound like a big deal, but it is. When
+	* a handle is imported as a type it will load that asset data and when it's
+	* released it will will release the data of the asset if the ref counter reaches
+	* 0. The issue is that if we have multiple ref counters for 1 type of asset on the
+	* handle and then add another type and decide to release the 2nd type, it won't
+	* release because the asset still has references even if the actual data has none.
+	* I need to find a way to support multiple types per handle.
+	*/
 	template <typename... Keys>
 	void QueryAssets(uint32_t assetHandles[], Keys... keys);
 

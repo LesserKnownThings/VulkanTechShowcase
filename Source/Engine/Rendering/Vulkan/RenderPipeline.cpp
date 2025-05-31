@@ -1,6 +1,5 @@
 #include "RenderPipeline.h"
 #include "EngineName.h"
-#include "Rendering/SharedUniforms.h"
 #include "Rendering/Vulkan/PushConstant.h"
 #include "Rendering/Vulkan/RenderUtilities.h"
 #include "Utilities/FileHelper.h"
@@ -66,7 +65,15 @@ void RenderPipeline::Initialize(const VkContext& inContext, RenderingInterface* 
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	CreateVertexInputInfo(vertexInputInfo);
+
+	std::vector<VkVertexInputBindingDescription> bindingDescriptions{};
+	std::vector<VkVertexInputAttributeDescription> attributeDescriptions{};
+	CreateVertexInputInfo(bindingDescriptions, attributeDescriptions);
+
+	vertexInputInfo.vertexBindingDescriptionCount = bindingDescriptions.size();
+	vertexInputInfo.pVertexBindingDescriptions = bindingDescriptions.data();
+	vertexInputInfo.vertexAttributeDescriptionCount = attributeDescriptions.size();
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -301,4 +308,9 @@ bool RenderPipeline::SupportsCamera() const
 bool RenderPipeline::SupportsLight() const
 {
 	return (flags & LIGHT_DESCRIPTOR_FLAG) != 0;
+}
+
+bool RenderPipeline::SupportsAnimations() const
+{
+	return (flags & ANIMATION_DESCRIPTOR_FLAG) != 0;
 }

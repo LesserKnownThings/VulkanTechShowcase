@@ -1,29 +1,15 @@
 #pragma once
 
+#include "Utilities/AlignedVectors.h"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-struct alignas(16) EntityTransformModel
+struct SharedConstant
 {
-	glm::mat4 model;
-};
-
-struct AlignedMatrix3
-{
-	AlignedMatrix3() = default;
-	AlignedMatrix3(const glm::mat3& matrix, const glm::vec3& viewPosition)
-	{
-		cols[0] = glm::vec4(matrix[0], viewPosition.x);
-		cols[1] = glm::vec4(matrix[1], viewPosition.y);
-		cols[2] = glm::vec4(matrix[2], viewPosition.z);
-	}
-
-	alignas(16) glm::vec4 cols[3];
-};
-
-struct LightConstant
-{
-	AlignedMatrix3 normalMatrix;
-	int32_t lightsCount;
-	float ambientStrength;
+	alignas(16) glm::mat4 model;
+	alignas(16) AlignedMatrix3 normalMatrix;
+	int32_t lightsCount = 0;
+	float ambientStrength = 0.0f;
+	uint32_t hasAnimations = 0;
 };

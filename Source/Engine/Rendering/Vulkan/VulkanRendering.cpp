@@ -1,10 +1,14 @@
 #include "VulkanRendering.h"
+#include "AssetManager/Animation/Animator.h"
+#include "AssetManager/Animation/AnimationData.h"
 #include "AssetManager/AssetManager.h"
 #include "AssetManager/Model/Model.h"
 #include "AssetManager/Model/MeshData.h"
 #include "AssetManager/Texture/TextureData.h"
 #include "Camera/Camera.h"
+#include "Camera/CameraMatrices.h"
 #include "ECS/Components/Components.h"
+#include "ECS/Systems/AnimationSystem.h"
 #include "ECS/Systems/MaterialSystem.h"
 #include "Engine.h"
 #include "Frame.h"
@@ -14,11 +18,14 @@
 #include "Rendering/Descriptors/DescriptorInfo.h"
 #include "Rendering/Descriptors/DescriptorRegistry.h"
 #include "Rendering/Light/Light.h"
-#include "Rendering/SharedUniforms.h"
 #include "RenderPipeline.h"
 #include "RenderUtilities.h"
 #include "Utilities/FileHelper.h"
 #include "World/View.h"
+
+#if WITH_EDITOR
+#include "EditorUI.h"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -91,6 +98,14 @@ bool VulkanRendering::InitializeVulkan()
 	CreateDescriptorRegistry();
 	CreateRenderPipelines();
 	SetupDebugMessenger();
+
+#if WITH_EDITOR
+	if (success)
+	{
+		editorUI = new EditorUI();
+		success &= editorUI->Initialize(this);
+	}
+#endif
 
 	return success;
 }
@@ -570,6 +585,7 @@ bool VulkanRendering::CreateDescriptorPool()
 	info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	info.poolSizeCount = poolSizes.size();
 	info.pPoolSizes = poolSizes.data();
+	info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 	info.maxSets = 100;
 
 	if (vkCreateDescriptorPool(context.device, &info, nullptr, &context.descriptorPool) != VK_SUCCESS)
@@ -589,35 +605,24 @@ void VulkanRendering::CreateRenderFrames()
 	}
 }
 
-void VulkanRendering::CreateGlobalUniformBuffers(std::array<AllocatedBuffer, MAX_FRAMES_IN_FLIGHT>& buffers)
+void VulkanRendering::CreateBuffer(EBufferType bufferType, uint32_t size, AllocatedBuffer& outBuffer)
 {
-	for (int32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	VkBufferUsageFlagBits type = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	switch (bufferType)
 	{
-		VkBuffer buffer;
-		VmaAllocation memory;
-
-		CreateBuffer(
-			sizeof(CameraMatrices),
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
-			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-			buffer,
-			memory
-		);
-
-		buffers[i].buffer = RenderUtilities::BufferToGenericHandle(buffer);
-		buffers[i].memory = RenderUtilities::AllocationToGenericHandle(memory);
+	case EBufferType::Uniform:
+		type = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		break;
+	case EBufferType::Storage:
+		type = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		break;
 	}
-}
 
-void VulkanRendering::CreateLightBuffer(AllocatedBuffer& outBuffer)
-{
 	VkBuffer buffer;
 	VmaAllocation memory;
-
 	CreateBuffer(
-		sizeof(LightInstance) * MAX_LIGHTS,
-		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+		size,
+		type,
 		VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
 		VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
 		buffer,
@@ -628,7 +633,7 @@ void VulkanRendering::CreateLightBuffer(AllocatedBuffer& outBuffer)
 	outBuffer.memory = RenderUtilities::AllocationToGenericHandle(memory);
 }
 
-void VulkanRendering::CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& globalLayout, DescriptorSetLayoutInfo& lightLayout)
+void VulkanRendering::CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& cameraMatricesLayout, DescriptorSetLayoutInfo& lightLayout, DescriptorSetLayoutInfo& animationLayout)
 {
 	VkDescriptorSetLayoutBinding cameraMatricesBinding{};
 	cameraMatricesBinding.binding = 0;
@@ -641,75 +646,55 @@ void VulkanRendering::CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& glo
 	cameraCreateInfo.bindingCount = 1;
 	cameraCreateInfo.pBindings = &cameraMatricesBinding;
 
-	VkDescriptorSetLayout cameraMatricesLayout;
-	if (vkCreateDescriptorSetLayout(context.device, &cameraCreateInfo, nullptr, &cameraMatricesLayout) != VK_SUCCESS)
+	VkDescriptorSetLayout camLayout;
+	if (vkCreateDescriptorSetLayout(context.device, &cameraCreateInfo, nullptr, &camLayout) != VK_SUCCESS)
 	{
 		std::cerr << "Failed to create descriptor set layout for the camera matrices!" << std::endl;
 	}
-	globalLayout.layout = RenderUtilities::DescriptorSetLayoutToGenericHandle(cameraMatricesLayout);
+	cameraMatricesLayout.layout = RenderUtilities::DescriptorSetLayoutToGenericHandle(camLayout);
 
-
+	// Light
 	VkDescriptorSetLayoutBinding lightBinding{};
+
 	lightBinding.binding = 0;
 	lightBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	lightBinding.descriptorCount = 1;
 	lightBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	VkDescriptorSetLayoutCreateInfo lightCreateInfo{};
-	lightCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	lightCreateInfo.bindingCount = 1;
-	lightCreateInfo.pBindings = &lightBinding;
+	VkDescriptorSetLayoutCreateInfo sharedCreateInfo{};
+	sharedCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	sharedCreateInfo.bindingCount = 1;
+	sharedCreateInfo.pBindings = &lightBinding;
 
 	VkDescriptorSetLayout lightDescriptorLayout;
-	if (vkCreateDescriptorSetLayout(context.device, &lightCreateInfo, nullptr, &lightDescriptorLayout) != VK_SUCCESS)
+	if (vkCreateDescriptorSetLayout(context.device, &sharedCreateInfo, nullptr, &lightDescriptorLayout) != VK_SUCCESS)
 	{
 		std::cerr << "Failed to create descriptor set layout for the light!" << std::endl;
 	}
 	lightLayout.layout = RenderUtilities::DescriptorSetLayoutToGenericHandle(lightDescriptorLayout);
+
+	// Animation
+	VkDescriptorSetLayoutBinding animationBinding{};
+
+	animationBinding.binding = 0;
+	animationBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+	animationBinding.descriptorCount = 1;
+	animationBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+	VkDescriptorSetLayoutCreateInfo animationCreateInfo{};
+	animationCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	animationCreateInfo.bindingCount = 1;
+	animationCreateInfo.pBindings = &animationBinding;
+
+	VkDescriptorSetLayout animationDescriptorLayout;
+	if (vkCreateDescriptorSetLayout(context.device, &animationCreateInfo, nullptr, &animationDescriptorLayout) != VK_SUCCESS)
+	{
+		std::cerr << "Failed to create descriptor set layout for the animation!" << std::endl;
+	}
+	animationLayout.layout = RenderUtilities::DescriptorSetLayoutToGenericHandle(animationDescriptorLayout);
 }
 
-void VulkanRendering::AllocateGlobalDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, std::array<GenericHandle, MAX_FRAMES_IN_FLIGHT>& outDescriptorSets)
-{
-	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, RenderUtilities::GenericHandleToDescriptorSetLayout(layoutInfo.layout));
-
-	VkDescriptorSetAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.descriptorPool = context.descriptorPool;
-	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-	allocInfo.pSetLayouts = layouts.data();
-
-	std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> globalDescriptorSets = {};
-
-	if (vkAllocateDescriptorSets(context.device, &allocInfo, globalDescriptorSets.data()) != VK_SUCCESS)
-	{
-		std::cerr << "Failed to allocate global descriptor sets!" << std::endl;
-	}
-
-	for (int32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
-	{
-		outDescriptorSets[i] = RenderUtilities::DescriptorSetToGenericHandle(globalDescriptorSets[i]);
-	}
-
-	for (int32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
-	{
-		VkDescriptorBufferInfo bufferInfo = {};
-		bufferInfo.buffer = RenderUtilities::GenericHandleToBuffer(descriptorRegistry->GetMatricesBuffers()[i].buffer);
-		bufferInfo.offset = 0;
-		bufferInfo.range = VK_WHOLE_SIZE;
-
-		VkWriteDescriptorSet write = {};
-		write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		write.dstSet = globalDescriptorSets[i];
-		write.dstBinding = 0;
-		write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		write.descriptorCount = 1;
-		write.pBufferInfo = &bufferInfo;
-
-		vkUpdateDescriptorSets(context.device, 1, &write, 0, nullptr);
-	}
-}
-
-void VulkanRendering::AllocateLightDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, GenericHandle& outDescriptorSet)
+void VulkanRendering::CreateDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, GenericHandle& outDescriptorSet)
 {
 	VkDescriptorSetLayout layout = RenderUtilities::GenericHandleToDescriptorSetLayout(layoutInfo.layout);
 
@@ -725,19 +710,74 @@ void VulkanRendering::AllocateLightDescriptorSet(const DescriptorSetLayoutInfo& 
 		std::cerr << "Failed to allocate light descriptor set!" << std::endl;
 	}
 	outDescriptorSet = RenderUtilities::DescriptorSetToGenericHandle(set);
+}
 
-	VkDescriptorBufferInfo bufferInfo = {};
-	bufferInfo.buffer = RenderUtilities::GenericHandleToBuffer(descriptorRegistry->GetLightBuffer().buffer);
-	bufferInfo.offset = 0;
-	bufferInfo.range = VK_WHOLE_SIZE;
+void VulkanRendering::UpdateDescriptorSet(EDescriptorSetType type, GenericHandle descriptorSet, AllocatedBuffer buffer)
+{
+	VkDescriptorType internalType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	switch (type)
+	{
+	case EDescriptorSetType::Uniform:
+		internalType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		break;
+	case EDescriptorSetType::UniformDynamic:
+		internalType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+		break;
+	case EDescriptorSetType::Storage:
+		internalType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		break;
+	case EDescriptorSetType::StorageDynamic:
+		internalType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+		break;
+	}
 
-	VkWriteDescriptorSet write = {};
+	VkDescriptorBufferInfo writeInfo{};
+	writeInfo.buffer = RenderUtilities::GenericHandleToBuffer(buffer.buffer);
+	writeInfo.offset = 0;
+	writeInfo.range = VK_WHOLE_SIZE;
+
+	VkWriteDescriptorSet write{};
 	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	write.dstSet = set;
+	write.dstSet = RenderUtilities::GenericHandleToDescriptorSet(descriptorSet);
 	write.dstBinding = 0;
-	write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	write.descriptorType = internalType;
 	write.descriptorCount = 1;
-	write.pBufferInfo = &bufferInfo;
+	write.pBufferInfo = &writeInfo;
+
+	vkUpdateDescriptorSets(context.device, 1, &write, 0, nullptr);
+}
+
+void VulkanRendering::UpdateDynamicDescriptorSet(EDescriptorSetType type, GenericHandle descriptorSet, AllocatedBuffer buffer, uint32_t binding, uint32_t offset, uint32_t range)
+{
+	VkDescriptorType internalType;
+	switch (type)
+	{
+	case EDescriptorSetType::Uniform:
+		internalType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		break;
+	case EDescriptorSetType::UniformDynamic:
+		internalType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+		break;
+	case EDescriptorSetType::Storage:
+		internalType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		break;
+	case EDescriptorSetType::StorageDynamic:
+		internalType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+		break;
+	}
+
+	VkDescriptorBufferInfo writeInfo{};
+	writeInfo.buffer = RenderUtilities::GenericHandleToBuffer(buffer.buffer);
+	writeInfo.offset = offset;
+	writeInfo.range = range;
+
+	VkWriteDescriptorSet write{};
+	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	write.dstSet = RenderUtilities::GenericHandleToDescriptorSet(descriptorSet);
+	write.dstBinding = binding;
+	write.descriptorType = internalType;
+	write.descriptorCount = 1;
+	write.pBufferInfo = &writeInfo;
 
 	vkUpdateDescriptorSets(context.device, 1, &write, 0, nullptr);
 }
@@ -1217,6 +1257,11 @@ std::vector<const char*> VulkanRendering::GetRequiredExtensions() const
 void VulkanRendering::UnInitialize()
 {
 	CleanupSwapChain();
+
+#if WITH_EDITOR
+	editorUI->UnInitialize();
+#endif
+
 	descriptorRegistry->UnInitialize();
 	materialSystem->ReleaseResources();
 	CleanupPendingDestroyBuffers();
@@ -1291,7 +1336,12 @@ void VulkanRendering::DrawFrame()
 
 	vkQueuePresentKHR(context.presentQueue, &presentInfo);
 
+	const float previousFrame = currentFrame;
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+	if (previousFrame != 0 && currentFrame == 0)
+	{
+		onRenderFrameReset.Invoke();
+	}
 }
 
 void VulkanRendering::DrawSingle(const View& view)
@@ -1299,21 +1349,16 @@ void VulkanRendering::DrawSingle(const View& view)
 	Frame& frame = renderFrames[currentFrame];
 	VkCommandBuffer cmdBuffer = frame.commandBuffer;
 
-	Camera* cam = view.camera;
-	if (cam->ProjectionChanged())
+	const Camera& camera = view.camera;
+
+	if (camera.projectionChanged)
 	{
-		cam->UpdateProjection([&](const glm::mat4& projection)
-			{
-				UpdateProjection(projection);
-			});
+		UpdateProjection(camera.data.projection);
 	}
 
-	if (cam->ViewChanged())
+	if (camera.viewChanged)
 	{
-		cam->UpdateView([&](const glm::mat4& view)
-			{
-				UpdateView(view);
-			});
+		UpdateView(camera.data.view);
 	}
 
 	AssetManager& assetManager = AssetManager::Get();
@@ -1328,6 +1373,12 @@ void VulkanRendering::DrawSingle(const View& view)
 
 	VkDescriptorSet previousMaterialDescriptor = VK_NULL_HANDLE;
 
+	// TODO caching so I don't bind it every entity
+	VkDescriptorSet previousMatricesSet = VK_NULL_HANDLE;
+	VkDescriptorSet previousAnimationSet = VK_NULL_HANDLE;
+	VkDescriptorSet previousLightSet = VK_NULL_HANDLE;
+
+	uint32_t entityIndex = 0;
 	for (const auto& it : entitiesPerPipeline)
 	{
 		RenderPipeline* pipeline = renderPipelines[it.first];
@@ -1340,46 +1391,72 @@ void VulkanRendering::DrawSingle(const View& view)
 			const Transform& transform = registry.get<const Transform>(entity);
 			const ModelComponent& modelComponent = registry.get<const ModelComponent>(entity);
 
+			SharedConstant sharedConstant{};
+			sharedConstant.model = transform.ComputeModel();
+			const glm::mat3 normalMatrix = transform.ComputeNormalMatrix();
+			const glm::vec3 viewPosition = camera.data.position;
+			sharedConstant.normalMatrix = AlignedMatrix3{ normalMatrix, viewPosition };
+			sharedConstant.lightsCount = view.lightsInView.size();
+			sharedConstant.ambientStrength = 0.15f;
+
+			if (auto animatorComponent = view.registry.try_get<AnimatorComponent>(entity))
+			{
+				sharedConstant.hasAnimations = 1;
+			}
+
+			vkCmdPushConstants(cmdBuffer,
+				pipeline->GetLayout(),
+				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+				0,
+				sizeof(SharedConstant),
+				&sharedConstant);
+
 			std::vector<VkDescriptorSet> sets = {};
 
 			if (pipeline->SupportsCamera())
 			{
-				sets.push_back(RenderUtilities::GenericHandleToDescriptorSet(descriptorRegistry->GetGlobalDescriptorSets()[currentFrame]));
-
-				vkCmdPushConstants(cmdBuffer,
-					pipeline->GetLayout(),
-					VK_SHADER_STAGE_VERTEX_BIT,
-					0,
-					sizeof(EntityTransformModel),
-					glm::value_ptr(transform.ComputeModel()));
+				sets.push_back(RenderUtilities::GenericHandleToDescriptorSet(descriptorRegistry->GetGlobalDescriptorSet()));
 			}
 
 			if (pipeline->SupportsLight())
 			{
 				sets.push_back(RenderUtilities::GenericHandleToDescriptorSet(descriptorRegistry->GetLightDescriptorSet()));
-
-				LightConstant lightConstant{};
-				const glm::mat3 normalMatrix = transform.ComputeNormalMatrix();
-				const glm::vec3 viewPosition = cam->GetPosition();
-				lightConstant.normalMatrix = AlignedMatrix3{ normalMatrix, viewPosition };
-				lightConstant.lightsCount = view.lightsInView.size();
-				lightConstant.ambientStrength = 0.15f;
-
-				vkCmdPushConstants(cmdBuffer,
-					pipeline->GetLayout(),
-					VK_SHADER_STAGE_FRAGMENT_BIT,
-					sizeof(EntityTransformModel),
-					sizeof(LightConstant),
-					&lightConstant);
 			}
 
-			vkCmdBindDescriptorSets(cmdBuffer,
-				VK_PIPELINE_BIND_POINT_GRAPHICS,
-				pipeline->GetLayout(),
-				0,
-				sets.size(),
-				sets.data(),
-				0, nullptr);
+			if (sets.size() > 0)
+			{
+				vkCmdBindDescriptorSets(cmdBuffer,
+					VK_PIPELINE_BIND_POINT_GRAPHICS,
+					pipeline->GetLayout(),
+					0,
+					sets.size(),
+					sets.data(),
+					0, nullptr);
+			}
+
+			if (pipeline->SupportsAnimations())
+			{
+				VkDescriptorSet animationDescriptorSet = RenderUtilities::GenericHandleToDescriptorSet(descriptorRegistry->GetAnimationDescriptorSet());
+
+				uint32_t dynamicOffset = 0;
+
+				if (auto animatorComponent = view.registry.try_get<AnimatorComponent>(entity))
+				{
+					view.animationSystem->GatherDrawData(animatorComponent->animatorInstanceHandle, entityIndex, currentFrame);
+					dynamicOffset = sizeof(AnimationLayout) * (currentFrame * MAX_ANIMATED_ENTITIES + entityIndex);
+				}
+
+				vkCmdBindDescriptorSets(cmdBuffer,
+					VK_PIPELINE_BIND_POINT_GRAPHICS,
+					pipeline->GetLayout(),
+					sets.size(),
+					1,
+					&animationDescriptorSet,
+					1,
+					&dynamicOffset);
+
+				sets.push_back(animationDescriptorSet);
+			}
 
 			const Model* model = AssetManager::Get().LoadAsset<Model>(modelComponent.handle);
 			const MeshData& meshData = model->GetMeshData();
@@ -1418,6 +1495,8 @@ void VulkanRendering::DrawSingle(const View& view)
 					0,
 					0);
 			}
+
+			++entityIndex;
 		}
 	}
 }
@@ -1429,6 +1508,11 @@ void VulkanRendering::EndFrame()
 	{
 		CleanupPendingDestroyBuffers();
 	}
+}
+
+VkCommandBuffer VulkanRendering::GetCurrentCommandBuffer() const
+{
+	return renderFrames[currentFrame].commandBuffer;
 }
 
 void VulkanRendering::AllocateMaterialDescriptorSet(EPipelineType pipeline, GenericHandle& outDescriptorSet)
@@ -1451,28 +1535,24 @@ void VulkanRendering::UpdateMaterialDescriptorSet(EPipelineType pipeline, const 
 
 void VulkanRendering::UpdateProjection(const glm::mat4& projection)
 {
-	for (int32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
-	{
-		VmaAllocation memory = RenderUtilities::GenericHandleToAllocation(descriptorRegistry->GetMatricesBuffers()[i].memory);
+	VmaAllocation memory = RenderUtilities::GenericHandleToAllocation(descriptorRegistry->GetMatriceBuffer().memory);
 
-		void* data;
-		vmaMapMemory(context.allocator, memory, &data);
-		memcpy(data, glm::value_ptr(projection), sizeof(glm::mat4));
-		vmaUnmapMemory(context.allocator, memory);
-	}
+	void* data;
+	vmaMapMemory(context.allocator, memory, &data);
+	uint32_t frameOffset = sizeof(CameraMatrices) * currentFrame;
+	memcpy(static_cast<char*>(data) + frameOffset, glm::value_ptr(projection), sizeof(glm::mat4));
+	vmaUnmapMemory(context.allocator, memory);
 }
 
 void VulkanRendering::UpdateView(const glm::mat4& view)
 {
-	for (int32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
-	{
-		VmaAllocation memory = RenderUtilities::GenericHandleToAllocation(descriptorRegistry->GetMatricesBuffers()[i].memory);
+	VmaAllocation memory = RenderUtilities::GenericHandleToAllocation(descriptorRegistry->GetMatriceBuffer().memory);
 
-		void* data;
-		vmaMapMemory(context.allocator, memory, &data);
-		memcpy(static_cast<char*>(data) + sizeof(glm::mat4), glm::value_ptr(view), sizeof(glm::mat4));
-		vmaUnmapMemory(context.allocator, memory);
-	}
+	void* data;
+	vmaMapMemory(context.allocator, memory, &data);
+	uint32_t frameOffset = sizeof(CameraMatrices) * currentFrame;
+	memcpy(static_cast<char*>(data) + frameOffset + sizeof(glm::mat4), glm::value_ptr(view), sizeof(glm::mat4));
+	vmaUnmapMemory(context.allocator, memory);
 }
 
 void VulkanRendering::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags bufferUsage, VmaMemoryUsage usage, VmaAllocationCreateFlags properties, VkBuffer& buffer, VmaAllocation& bufferMemory) const
@@ -1755,6 +1835,10 @@ void VulkanRendering::RecordCommandBuffer(uint32_t imageIndex)
 	vkCmdSetScissor(frame.commandBuffer, 0, 1, &scissor);
 
 	RenderTasks();
+
+#if WITH_EDITOR
+	editorUI->DrawFrame(reinterpret_cast<uintptr_t>(renderFrames[currentFrame].commandBuffer));
+#endif
 
 	vkCmdEndRenderPass(frame.commandBuffer);
 
