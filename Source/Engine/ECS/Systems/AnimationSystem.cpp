@@ -26,6 +26,7 @@ AnimatorComponent AnimationSystem::CreateAnimator(uint32_t skeletonHandle, const
 
 	Animator* animator = new Animator();
 	animator->Initialize();
+	animator->SetSkeleton(skeleton);
 
 	for (const std::string& animation : animations)
 	{
@@ -66,12 +67,10 @@ void AnimationSystem::GatherDrawData(uint32_t handle, uint32_t entityIndex, uint
 		const uint32_t singleBufferSize = sizeof(AnimationLayout);
 
 		const std::array<glm::mat4, MAX_BONES>& transforms = animator->GetBoneTransforms();
-		const std::array<AlignedMatrix3, MAX_BONES>& normals = animator->GetBoneNormals();
 
 		AnimationLayout layout
 		{
 			transforms,
-			normals
 		};
 
 		memcpy(buffer, &layout, singleBufferSize);

@@ -8,6 +8,8 @@
 class RenderUtilities
 {
 public:
+	static void SetDebugName(VkDevice device, uintptr_t objectHandle, VkObjectType objectType, const char* name);
+
 	static VkBuffer GenericHandleToBuffer(GenericHandle handle)
 	{
 		return reinterpret_cast<VkBuffer>(std::get<uintptr_t>(handle));

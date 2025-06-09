@@ -6,13 +6,12 @@
 #include <vector>
 #include <tuple>
 
-constexpr int32_t RENDER_HANDLE = 0x01;
-constexpr uint32_t TICK_HANDLE = 0x02;
-constexpr uint32_t UI_RENDER_HANDLE = 0x04;
-constexpr uint32_t GC_HANDLE = 0x08;
+constexpr uint32_t TICK_HANDLE = 1 << 2;
+constexpr uint32_t UI_RENDER_HANDLE = 1 << 3;
+constexpr uint32_t GC_HANDLE = 1 << 4;
 
 #if WITH_EDITOR
-constexpr uint32_t EDITOR_UI_HANDLE = 0x16;
+constexpr uint32_t EDITOR_UI_HANDLE = 1 << 8;
 #endif
 
 constexpr int32_t DEFAULT_PRIORITY = 100;

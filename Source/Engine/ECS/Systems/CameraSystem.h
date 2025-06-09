@@ -12,7 +12,7 @@ public:
 	~CameraSystem();
 	CameraSystem();
 
-	Camera* CreateCamera(const CameraData& data);
+	Camera CreateCamera(const CameraData& data);
 
 private:
 	void HandleRenderFrameReset();

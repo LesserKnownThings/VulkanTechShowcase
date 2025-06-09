@@ -1,4 +1,4 @@
-#version 450
+#version 460
 
 layout (constant_id = 0) const uint MAX_BONES = 100;
 layout (constant_id = 1) const uint MAX_BONE_INFLUENCE = 4;
@@ -26,9 +26,8 @@ layout(set = 0, binding = 0) uniform Camera {
 } camera;
 
 // Dynamic Buffer
-layout(set = 2, binding = 0) readonly buffer Animation {
+layout(set = 3, binding = 0) readonly buffer Animation {
     mat4 boneMatrices[MAX_BONES];
-    mat3 boneNormals[MAX_BONES];
 }animation;
 
 layout(push_constant, std430) uniform SharedConstants {
@@ -44,27 +43,34 @@ layout(push_constant, std430) uniform SharedConstants {
 
 void main() {
     vec4 skinnedPosition = vec4(0.0);
-    vec3 skinnedNormal = normal;
+    vec3 skinnedNormal = vec3(0.0);
 
     if(sharedConstants.hasAnimation == 1) {
         for(int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
             if(boneIDS[i] == -1) {
                 continue;
             }
-            if(boneIDS[i] >= MAX_BONE_INFLUENCE) {
+            if(boneIDS[i] >= MAX_BONES) {
                 skinnedPosition = vec4(position, 1.0);
+                skinnedNormal = normal;
                 break;
             }
-            vec4 localPosition = animation.boneMatrices[boneIDS[i]] * vec4(position, 1.0);
+
+            uint boneID = boneIDS[i];
+            mat4 boneMatrix = animation.boneMatrices[boneID];
+
+            vec4 localPosition = boneMatrix * vec4(position, 1.0);
             skinnedPosition += localPosition * weights[i];
-            skinnedNormal = animation.boneNormals[boneIDS[i]] * normal;
+
+            skinnedNormal += mat3(boneMatrix) * normal;
         }
     }
     else {
         skinnedPosition = vec4(position, 1.0);
+        skinnedNormal = normal;
     }
 
-    vertexData.normal = normal;
+    vertexData.normal = skinnedNormal;
     vertexData.tangent = tangent;
     vertexData.bitangent = bitangent;
     vertexData.fragPosition = vec3(sharedConstants.model * skinnedPosition);

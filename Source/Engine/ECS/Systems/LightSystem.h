@@ -20,6 +20,8 @@ public:
 
 	Light CreateLight(const entt::entity& entity, CommonLightData* lightData, ELightType lightType);
 
+	const LightInstance& GetInstance(uint32_t handle) const;
+
 	void RotateLight(uint32_t lightID, const glm::vec3& axis, float angle);
 
 	void UpdateLightPosition(uint32_t lightHandle, const glm::vec3& position);

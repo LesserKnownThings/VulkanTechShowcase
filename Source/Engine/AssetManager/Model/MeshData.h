@@ -1,9 +1,10 @@
 #pragma once
 
-#include "AssetManager/Animation/BoneData.h"
-
 #include <cstdint>
 #include <glm/glm.hpp>
+
+// How many vertices a bone can influence
+constexpr int32_t MAX_BONE_INFLUENCE = 4;
 
 struct Vertex
 {
@@ -12,8 +13,9 @@ struct Vertex
 	glm::vec3 tangent;
 	glm::vec3 biTangent;
 	glm::vec2 uv;
-	int32_t boneIDs[MAX_BONE_INFLUENCE]{ -1, -1, -1, -1 };
-	float weights[MAX_BONE_INFLUENCE];
+
+	glm::ivec4 boneIDs = glm::ivec4{ -1 };
+	glm::vec4 weights = glm::vec4(0.0f);
 };
 
 struct MeshIndexData

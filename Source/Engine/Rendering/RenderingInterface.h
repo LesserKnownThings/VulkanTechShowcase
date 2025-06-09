@@ -28,6 +28,8 @@ struct View;
 DECLARE_DELEGATE(OnRenderFrameReset);
 DECLARE_DELEGATE_TwoParams(OnWindowResizeParams, float, float);
 
+constexpr uint32_t SHADOW_MAP_SIZE = 4096; // ULTRA
+
 enum class EBufferType
 {
 	Uniform,
@@ -49,21 +51,19 @@ public:
 	virtual void UnInitialize();
 
 	virtual void DrawFrame() = 0;
-	virtual void EndFrame() = 0;
+	virtual void EndFrame() = 0;	
 
-	virtual void DrawSingle(const View& view) = 0;
-
-	// Material descriptors
-	virtual void AllocateMaterialDescriptorSet(EPipelineType pipeline, GenericHandle& outDescriptorSet) = 0;
-	virtual void UpdateMaterialDescriptorSet(EPipelineType pipeline, const std::unordered_map<EngineName, DescriptorDataProvider>& dataProviders) = 0;
+	// Descriptor Sets
+	virtual bool TryGetDescriptorLayoutForOwner(EPipelineType pipeline, EDescriptorOwner owner, DescriptorSetLayoutInfo& outLayoutInfo) = 0;
+	virtual void UpdateDescriptorSet(EPipelineType pipeline, const std::unordered_map<EngineName, DescriptorDataProvider>& dataProviders) = 0;
 	// *******************
 
 	/// Global descriptors
 	virtual void CreateBuffer(EBufferType bufferType, uint32_t size, AllocatedBuffer& outBuffer) = 0;
-	virtual void CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& cameraMatricesLayout, DescriptorSetLayoutInfo& lightLayout, DescriptorSetLayoutInfo& animationLayout) = 0;
+	virtual void CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& cameraMatricesLayout, DescriptorSetLayoutInfo& lightLayout, DescriptorSetLayoutInfo& animationLayout, DescriptorSetLayoutInfo& shadowLayout) = 0;
 	virtual void CreateDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, GenericHandle& outDescriptorSet) = 0;
 
-	virtual void UpdateDescriptorSet(EDescriptorSetType type, GenericHandle descriptorSet, AllocatedBuffer buffer) = 0;
+	virtual void UpdateDescriptorSet(EDescriptorSetType type, GenericHandle descriptorSet, AllocatedBuffer buffer, uint32_t binding = 0) = 0;
 	virtual void UpdateDynamicDescriptorSet(EDescriptorSetType type, GenericHandle descriptorSet, AllocatedBuffer buffer, uint32_t binding, uint32_t offset, uint32_t range) = 0;
 	virtual void DestroyDescriptorSetLayout(const DescriptorSetLayoutInfo& layoutInfo) = 0;
 	// *******************
@@ -89,14 +89,18 @@ public:
 	OnWindowResizeParams onWindowResizeParams;
 	OnRenderFrameReset onRenderFrameReset;
 
+	static uint32_t MIN_UNIFORM_ALIGNMENT;
+
 protected:
+	virtual void DrawShadows(const View& view) = 0;
+	virtual void DrawSingle(const View& view) = 0;
+
 	virtual void UpdateProjection(const glm::mat4& projection) = 0;
 	virtual void UpdateView(const glm::mat4& view) = 0;
 
 	virtual void HandleWindowResized();
 	virtual void HandleWindowMinimized() = 0;
 	void CreateDescriptorRegistry();
-	void RenderTasks();
 
 	int32_t width = 960;
 	int32_t height = 540;
@@ -108,5 +112,5 @@ protected:
 
 	// Subsystems
 	DescriptorRegistry* descriptorRegistry = nullptr;
-	MaterialSystem* materialSystem = nullptr;
+	MaterialSystem* materialSystem = nullptr;	
 };

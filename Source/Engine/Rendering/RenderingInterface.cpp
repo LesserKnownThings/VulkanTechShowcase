@@ -3,9 +3,10 @@
 #include "ECS/Systems/MaterialSystem.h"
 #include "Engine.h"
 #include "Input/InputSystem.h"
-#include "TaskManager.h"
 
 #include <SDL3/SDL.h>
+
+uint32_t RenderingInterface::MIN_UNIFORM_ALIGNMENT = 64;
 
 bool RenderingInterface::Initialize(int32_t inWidth, int32_t inHeight)
 {
@@ -46,9 +47,4 @@ void RenderingInterface::CreateDescriptorRegistry()
 {
 	descriptorRegistry = new DescriptorRegistry(this);
 	descriptorRegistry->Initialize();
-}
-
-void RenderingInterface::RenderTasks()
-{
-	TaskManager::Get().ExecuteTasks(RENDER_HANDLE);
 }

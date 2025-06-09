@@ -7,10 +7,12 @@ struct AlignedMatrix3
 	AlignedMatrix3() = default;
 	AlignedMatrix3(const glm::mat3& matrix, const glm::vec3& viewPosition)
 	{
-		cols[0] = glm::vec4(matrix[0], viewPosition.x);
-		cols[1] = glm::vec4(matrix[1], viewPosition.y);
-		cols[2] = glm::vec4(matrix[2], viewPosition.z);
+		col0 = glm::vec4(matrix[0], viewPosition.x);
+		col1 = glm::vec4(matrix[1], viewPosition.y);
+		col2 = glm::vec4(matrix[2], viewPosition.z);
 	}
 
-	alignas(16) glm::vec4 cols[3];
+	alignas(16) glm::vec4 col0;
+	alignas(16) glm::vec4 col1;
+	alignas(16) glm::vec4 col2;
 };

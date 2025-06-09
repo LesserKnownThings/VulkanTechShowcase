@@ -6,6 +6,8 @@
 using GenericHandle = std::variant<uint32_t, uintptr_t>;
 
 constexpr int32_t MAX_FRAMES_IN_FLIGHT = 2;
+// Only supporting double buffering for smoother movement
+constexpr int32_t MAX_SWAPCHAIN_IMAGES = 2;
 
 enum class ERenderDataLoadState : uint8_t
 {
@@ -21,7 +23,10 @@ enum class EPipelineType : uint8_t
 	PBR,
 	UI,
 	Skybox,
-	Debug
+	Debug,
+	ShadowMap,
+	ShadowMapDebug,
+	CascadeVisualizer
 };
 
 struct AllocatedBuffer

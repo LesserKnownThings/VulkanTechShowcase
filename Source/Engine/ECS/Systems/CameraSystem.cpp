@@ -12,11 +12,11 @@ CameraSystem::CameraSystem()
 	GameEngine->GetRenderingSystem()->onRenderFrameReset.Bind(this, &CameraSystem::HandleRenderFrameReset);
 }
 
-Camera* CameraSystem::CreateCamera(const CameraData& data)
+Camera CameraSystem::CreateCamera(const CameraData& data)
 {
 	uint32_t handle = GenerateHandle();
 	cameras.emplace(handle, Camera{ data });
-	return &cameras[handle];
+	return cameras[handle];
 }
 
 void CameraSystem::HandleRenderFrameReset()

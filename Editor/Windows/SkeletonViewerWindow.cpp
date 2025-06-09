@@ -9,7 +9,7 @@
 void SkeletonViewerWindow::Initialize()
 {
 	uint32_t handles[1];
-	AssetManager::Get().QueryAssets(handles, "Animations\\Dance");
+	AssetManager::Get().QueryAssets(handles, "Animations\\Pointing");
 	handle = handles[0];
 
     isShowing = true;
@@ -21,11 +21,11 @@ void SkeletonViewerWindow::UnInitialize()
 
 void SkeletonViewerWindow::Draw()
 {
-	if (ImGui::Begin("SkeletonViewer", &isShowing))
+	if (ImGui::Begin("Skeleton Viewer", &isShowing))
 	{
-		/*Skeleton* skeleton = AssetManager::Get().LoadAsset<Skeleton>(handle);
+		Skeleton* skeleton = AssetManager::Get().LoadAsset<Skeleton>(handle);
 		const SkeletonData& data = skeleton->GetSkeletonData();
-        DrawBoneTree(data.rootBone);*/
+        DrawBoneTree(data.rootBone);
 	}
 
 	ImGui::End();

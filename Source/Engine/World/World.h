@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Camera/Camera.h"
+
 #include <cstdint>
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
@@ -10,7 +12,7 @@ class AnimationSystem;
 class CameraSystem;
 class LightSystem;
 
-struct Camera;
+struct View;
 
 class World
 {
@@ -18,11 +20,12 @@ public:
 	virtual void Initialize();
 	virtual void UnInitialize();
 
+	void GetWorldView(View* view);
+
 protected:
-	virtual void Draw();
 	virtual void Tick(float deltaTime);
 
-	Camera* mainCam = nullptr;
+	Camera mainCam;
 
 	AnimationSystem* animationSystem = nullptr;
 	CameraSystem* cameraSystem = nullptr;
@@ -31,7 +34,8 @@ protected:
 	entt::registry registry;
 
 private:
-	void CreateCharacter();
+	void CreateCharacter(const glm::vec3& pos);
+	void CreateFloor();
 
 	void HandleCameraMovement(float deltaTime);
 	void HandleCameraLook(float deltaTime);

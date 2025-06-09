@@ -14,8 +14,8 @@
 #include "Input/InputSystem.h"
 #include "Rendering/AbstractData.h"
 #include "Rendering/Descriptors/DescriptorInfo.h"
+#include "Rendering/Descriptors/Semantics.h"
 #include "Rendering/Light/Light.h"
-#include "Rendering/Material/MaterialSemantics.h"
 #include "Rendering/RenderingInterface.h"
 #include "TaskManager.h"
 #include "View.h"
@@ -29,17 +29,16 @@ void World::Initialize()
 	cameraSystem = new CameraSystem();
 
 	CameraData mainCamData{};
-	mainCamData.position = glm::vec3(0.0f, 25.0f, 100.0f);
+	mainCamData.position = glm::vec3(0.0f, 25.0f, -100.0f);
 	mainCam = cameraSystem->CreateCamera(mainCamData);
 
 	TaskManager::Get().RegisterTask(this, &World::Tick, TICK_HANDLE);
-	TaskManager::Get().RegisterTask(this, &World::Draw, RENDER_HANDLE);
 
 	GameEngine->GetInputSystem()->onMouseButtonPressedDelegate.Bind(this, &World::HandleMouseButton);
 	RenderingInterface* renderingInterface = GameEngine->GetRenderingSystem();
 
 	entt::entity directionalLight = registry.create();
-	registry.emplace<Transform>(directionalLight, Transform{ .eulers = glm::vec3(35.0f, 15.0f, 0.0f) });
+	registry.emplace<Transform>(directionalLight, Transform{ .eulers = glm::vec3(45.0f, 15.0f, 0.0f) });
 	CommonLightData dirLightData
 	{
 		Color::white,
@@ -48,32 +47,67 @@ void World::Initialize()
 	Light dirLight = lightSystem->CreateLight(directionalLight, &dirLightData, ELightType::Directional);
 	registry.emplace<Light>(directionalLight, dirLight);
 
-	CreateCharacter();
+	CreateFloor();
+	CreateCharacter(glm::vec3(0.0f, 0.0f, -50.0f));
+	CreateCharacter(glm::vec3(0.0f));
+
+	/*entt::entity pointEntity = registry.create();
+	registry.emplace<Transform>(pointEntity, Transform{.position = glm::vec3(0.0f, 5.0f, -15.0f)});
+	PointLightData pointData
+	{
+		Color::yellow,
+		5.0f,
+		100.0f
+	};
+	Light pointLight = lightSystem->CreateLight(pointEntity, &pointData, ELightType::Point);
+	registry.emplace<Light>(pointEntity, pointLight);*/
 }
 
-void World::CreateCharacter()
+void World::CreateCharacter(const glm::vec3& pos)
 {
 	AssetManager& assetManager = AssetManager::Get();
 	RenderingInterface* renderingSystem = GameEngine->GetRenderingSystem();
 
 	uint32_t handles[3];
-	assetManager.QueryAssets(handles, "Animations\\Test", "Textures\\PolygonDarkFantasy_Texture_01_B", "Animations\\Dance");
+	assetManager.QueryAssets(handles, "Animations\\Skeleton", "Textures\\PolygonDarkFantasy_Texture_01_B", "Animations\\Pointing");
 
 	Model* model = assetManager.LoadAsset<Model>(handles[0]);
 	const MeshData& mesh = model->GetMeshData();
 
-	AnimatorComponent anim = animationSystem->CreateAnimator(handles[2], { "Data\\Import\\Animations\\Dance.fbx" });
-
+	AnimatorComponent anim = animationSystem->CreateAnimator(handles[2], { "Data\\Import\\Animations\\Pointing.fbx" });
 
 	MaterialDescriptorBindingResource resource{};
-	resource.semantic = MaterialSemantics::Albedo;
+	resource.semantic = Semantics::AlbedoSampler;
 	resource.textureAssetHandle = handles[1];
 	renderingSystem->GetMaterialSystem()->SetTextures(mesh.materials[0].materialInstanceHandle, { resource });
 
 	entt::entity hero = registry.create();
-	registry.emplace<Transform>(hero, Transform{.scale = glm::vec3(0.25f)});
+	registry.emplace<Transform>(hero, Transform{ .position = pos, .scale = glm::vec3(0.5f) });
 	registry.emplace<ModelComponent>(hero, handles[0]);
 	registry.emplace<AnimatorComponent>(hero, anim);
+}
+
+void World::CreateFloor()
+{
+	AssetManager& assetManager = AssetManager::Get();
+	RenderingInterface* renderingSystem = GameEngine->GetRenderingSystem();
+
+	uint32_t handles[2];
+	assetManager.QueryAssets(handles, "Meshes\\Plane", "Textures\\Floor");
+
+	Model* model = assetManager.LoadAsset<Model>(handles[0]);
+	const MeshData& mesh = model->GetMeshData();
+
+	MaterialDescriptorBindingResource resource{};
+	resource.semantic = Semantics::AlbedoSampler;
+	resource.textureAssetHandle = handles[1];
+	renderingSystem->GetMaterialSystem()->SetTextures(mesh.materials[0].materialInstanceHandle, { resource });
+
+	entt::entity hero = registry.create();
+	registry.emplace<Transform>(hero, Transform{
+		.eulers = glm::vec3(90, 0.0f, 0.0f),
+		.scale = glm::vec3(500.0f) });
+	registry.emplace<ModelComponent>(hero, handles[0]);
 }
 
 void World::UnInitialize()
@@ -92,43 +126,25 @@ void World::UnInitialize()
 		});
 }
 
-void World::Draw()
+void World::GetWorldView(View* view)
 {
-	RenderingInterface* renderingInterface = GameEngine->GetRenderingSystem();
+	auto entitiesInView = registry.view<const Transform, const ModelComponent>();
 
-	auto enttView = registry.view<const Transform, const ModelComponent>();
-	std::vector<entt::entity> entities;
-	enttView.each([&](const auto entity, const Transform& transform, const ModelComponent& model)
+	entitiesInView.each([&](const auto entity, const Transform& transform, const ModelComponent& model)
 		{
-			entities.push_back(entity);
+			view->entitiesInView.push_back(entity);
 		});
 
-	auto lightsView = registry.view<const Light>();
-	std::vector<entt::entity> lights;
-	lightsView.each([&](const auto entity, const Light& light)
+	auto lightsInView = registry.view<const Light>();
+	lightsInView.each([&](const auto entity, const Light& light)
 		{
-			lights.push_back(entity);
+			view->lightsInView.push_back(entity);
 		});
 
-	View view
-	{
-		*mainCam,
-		registry,
-		entities,
-		lights,
-
-		animationSystem,
-		lightSystem
-	};
-
-
-	auto animators = registry.view<const AnimatorComponent>();
-	animators.each([&](entt::entity, const AnimatorComponent& component)
-		{
-			//animationSystem->UpdateDrawData(component.animatorInstanceHandle);
-		});
-
-	GameEngine->GetRenderingSystem()->DrawSingle(view);
+	view->registry = &registry;
+	view->camera = &mainCam;
+	view->animationSystem = animationSystem;
+	view->lightSystem = lightSystem;
 }
 
 void World::Tick(float deltaTime)
@@ -136,10 +152,16 @@ void World::Tick(float deltaTime)
 	HandleCameraMovement(deltaTime);
 	HandleCameraLook(deltaTime);
 
+	auto tr = registry.view<Transform, const ModelComponent>();
+	tr.each([&](entt::entity, Transform& transform, const ModelComponent& model)
+		{
+			//transform.eulers.y += 10.0f * deltaTime;			
+		});
+
 	auto view = registry.view<const Light>();
 	view.each([&](entt::entity, const Light& light)
 		{
-			//lightSystem->RotateLight(light.lightInstanceHandle, glm::vec3(1.0, 1.0f, 0.0f), 50.0f * deltaTime);
+			lightSystem->RotateLight(light.lightInstanceHandle, glm::vec3(1.0, 1.0f, 0.0f), 5.0f * deltaTime);
 		});
 
 	auto animators = registry.view<const AnimatorComponent>();
@@ -156,16 +178,16 @@ void World::HandleCameraMovement(float deltaTime)
 	const float horizontalAxis = inputSystem->GetHorizontalAxis();
 	const float verticalAxis = inputSystem->GetVerticalAxis();
 
-	const glm::vec3 forward = mainCam->data.forward * verticalAxis;
-	const glm::vec3 right = mainCam->data.right * horizontalAxis;
+	const glm::vec3 forward = mainCam.data.forward * verticalAxis;
+	const glm::vec3 right = mainCam.data.right * horizontalAxis;
 	const glm::vec3 movement = forward + right;
 
 	constexpr float CAM_MOVEMENT_SPEED = 30.0f;
 	if (glm::length(movement) > 0.0f)
 	{
-		glm::vec3 pos = mainCam->data.position;
+		glm::vec3 pos = mainCam.data.position;
 		pos += movement * CAM_MOVEMENT_SPEED * deltaTime;
-		mainCam->SetPosition(pos);
+		mainCam.SetPosition(pos);
 	}
 }
 
@@ -175,12 +197,12 @@ void World::HandleCameraLook(float deltaTime)
 	{
 		InputSystem* inputSystem = GameEngine->GetInputSystem();
 
-		constexpr float CAM_LOOK_SPEED = 2.45f;
+		constexpr float CAM_LOOK_SPEED = 150.0f;
 
 		const glm::vec2& mouseAxis = inputSystem->GetMouseAxis();
 		if (glm::length(mouseAxis) > 0.0f)
 		{
-			mainCam->Rotate(glm::vec3(-mouseAxis.y, -mouseAxis.x, 0.0f) * CAM_LOOK_SPEED * deltaTime);
+			mainCam.Rotate(glm::vec3(mouseAxis.y, mouseAxis.x, 0.0f) * CAM_LOOK_SPEED * deltaTime);
 		}
 	}
 }

@@ -8,10 +8,16 @@
 
 float GetScaleFactor(float lastTimeStamp, float nextTimeStamp, float animationTime)
 {
-	float scaleFactor = 0.0f;
-	float midWayLength = animationTime - lastTimeStamp;
 	float framesDiff = nextTimeStamp - lastTimeStamp;
-	scaleFactor = midWayLength / framesDiff;
+	if (framesDiff <= 0.0f)
+		return 0.0f;
+
+	float midWayLength = animationTime - lastTimeStamp;
+	float scaleFactor = midWayLength / framesDiff;
+
+	if (scaleFactor < 0.0f) scaleFactor = 0.0f;
+	else if (scaleFactor > 1.0f) scaleFactor = 1.0f;
+
 	return scaleFactor;
 }
 
@@ -71,7 +77,7 @@ glm::mat4 InterpolateScale(const BoneInstance& boneInstance, float animationTime
 {
 	if (boneInstance.numScales == 1)
 	{
-		auto scale = glm::normalize(boneInstance.scales[0].scale);
+		auto scale = boneInstance.scales[0].scale;
 		return glm::scale(glm::mat4(1.0f), scale);
 	}
 
@@ -85,10 +91,11 @@ glm::mat4 InterpolateScale(const BoneInstance& boneInstance, float animationTime
 		}
 	}
 	int32_t p1Index = p0Index + 1;
+
 	float scaleFactor = GetScaleFactor(boneInstance.scales[p0Index].timeStamp,
 		boneInstance.scales[p1Index].timeStamp, animationTime);
-	glm::vec3 finalScale = glm::mix(boneInstance.scales[p0Index].scale, boneInstance.scales[p1Index].scale
-		, scaleFactor);
+
+	glm::vec3 finalScale = glm::mix(boneInstance.scales[p0Index].scale, boneInstance.scales[p1Index].scale, scaleFactor);
 	return glm::scale(glm::mat4(1.0f), finalScale);
 }
 

@@ -6,7 +6,7 @@
 #include "Engine.h"
 #include "Rendering/AbstractData.h"
 #include "Rendering/Descriptors/DescriptorInfo.h"
-#include "Rendering/Material/MaterialSemantics.h"
+#include "Rendering/Descriptors/Semantics.h"
 #include "Rendering/RenderingInterface.h"
 
 #include <glm/glm.hpp>
@@ -38,7 +38,7 @@ Material MaterialSystem::CreatePBRMaterial(std::optional<uint32_t> albedo, bool 
 	{
 		EPipelineType::PBR,
 		{
-			MaterialDescriptorBindingResource {MaterialSemantics::Albedo, albedo.value()}
+			MaterialDescriptorBindingResource {Semantics::AlbedoSampler, albedo.value()}
 		}
 	};
 
@@ -61,7 +61,15 @@ Material MaterialSystem::CreatePBRMaterial(std::optional<uint32_t> albedo, bool 
 
 	RenderingInterface* renderingInterface = GameEngine->GetRenderingSystem();
 
-	renderingInterface->AllocateMaterialDescriptorSet(key.pipeline, instance.descriptorSet);
+	DescriptorSetLayoutInfo layoutInfo;
+	if (renderingInterface->TryGetDescriptorLayoutForOwner(EPipelineType::PBR, EDescriptorOwner::Material, layoutInfo))
+	{
+		renderingInterface->CreateDescriptorSet(layoutInfo, instance.descriptorSet);
+	}
+	else
+	{
+		throw std::runtime_error("Could not find descriptor layout, either the pipeline is wrong or the descriptor layout was not created!");
+	}
 	// Need to update the texture in the material after creating the sets
 
 	const Texture* texture = assetManager.LoadAsset<Texture>(albedo.value());
@@ -75,9 +83,9 @@ Material MaterialSystem::CreatePBRMaterial(std::optional<uint32_t> albedo, bool 
 
 	std::unordered_map<EngineName, DescriptorDataProvider> providers =
 	{
-		std::make_pair(MaterialSemantics::Albedo, albedoProvider)
+		std::make_pair(Semantics::AlbedoSampler, albedoProvider)
 	};
-	renderingInterface->UpdateMaterialDescriptorSet(instance.key.pipeline, providers);
+	renderingInterface->UpdateDescriptorSet(instance.key.pipeline, providers);
 
 	materialInstances[value] = instance;
 
@@ -132,6 +140,6 @@ void MaterialSystem::SetTextures(uint32_t handle, const std::vector<MaterialDesc
 		}
 
 		RenderingInterface* renderingInterface = GameEngine->GetRenderingSystem();
-		renderingInterface->UpdateMaterialDescriptorSet(instance.key.pipeline, providers);
+		renderingInterface->UpdateDescriptorSet(instance.key.pipeline, providers);
 	}
 }

@@ -5,6 +5,7 @@
 #include "Rendering/RenderingInterface.h"
 #include "VkContext.h"
 
+#include <array>
 #include <SDL3/SDL_video.h>
 #include <string>
 #include <vector>
@@ -20,6 +21,8 @@ class EditorUI;
 
 struct MeshData;
 struct MeshRenderData;
+
+enum class EKeyPressType : uint8_t;
 
 constexpr uint32_t NVIGIA_GPU = 0x10DE;
 constexpr uint32_t AMD_GPU = 0x1002;
@@ -40,6 +43,32 @@ struct SingleTimeCommandBuffer
 	VkQueue queue = VK_NULL_HANDLE;
 };
 
+struct SwapChainData
+{
+	void Resize(uint32_t size)
+	{
+		swapChainFramebuffers.resize(size);
+		images.resize(size);
+		views.resize(size);
+		depths.resize(size);
+		colors.resize(size);
+	}
+
+	std::vector<VkFramebuffer> swapChainFramebuffers;
+
+	std::vector<VkImage> images;
+	std::vector<VkImageView> views;
+
+	std::vector<AllocatedTexture> depths;
+	std::vector<AllocatedTexture> colors;
+};
+
+struct ShadowMapData
+{
+	VkFramebuffer shadowMappingFB = VK_NULL_HANDLE;
+	AllocatedTexture shadowDepthTexture;
+};
+
 class VulkanRendering : public RenderingInterface
 {
 public:
@@ -47,22 +76,21 @@ public:
 	void UnInitialize() override;
 
 	void DrawFrame() override;
-	void DrawSingle(const View& view) override;
 	void EndFrame() override;
 
 	const VkContext& GetContext() const { return context; }
 	VkCommandBuffer GetCurrentCommandBuffer() const;
 
 	// Material descriptors
-	void AllocateMaterialDescriptorSet(EPipelineType pipeline, GenericHandle& outDescriptorSet) override;
-	void UpdateMaterialDescriptorSet(EPipelineType pipeline, const std::unordered_map<EngineName, DescriptorDataProvider>& dataProviders) override;
+	bool TryGetDescriptorLayoutForOwner(EPipelineType pipeline, EDescriptorOwner owner, DescriptorSetLayoutInfo& outLayoutInfo) override;
+	void UpdateDescriptorSet(EPipelineType pipeline, const std::unordered_map<EngineName, DescriptorDataProvider>& dataProviders) override;
 	// *******************
 
 	/// Global descriptors
 	void CreateBuffer(EBufferType bufferType, uint32_t size, AllocatedBuffer& outBuffer) override;
-	void CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& cameraMatricesLayout, DescriptorSetLayoutInfo& lightLayout, DescriptorSetLayoutInfo& animationLayout) override;
+	void CreateGlobalDescriptorLayouts(DescriptorSetLayoutInfo& cameraMatricesLayout, DescriptorSetLayoutInfo& lightLayout, DescriptorSetLayoutInfo& animationLayout, DescriptorSetLayoutInfo& shadowLayout) override;
 	void CreateDescriptorSet(const DescriptorSetLayoutInfo& layoutInfo, GenericHandle& outDescriptorSet) override;
-	void UpdateDescriptorSet(EDescriptorSetType type, GenericHandle descriptorSet, AllocatedBuffer buffer) override;
+	void UpdateDescriptorSet(EDescriptorSetType type, GenericHandle descriptorSet, AllocatedBuffer buffer, uint32_t binding = 0) override;
 	void UpdateDynamicDescriptorSet(EDescriptorSetType type, GenericHandle descriptorSet, AllocatedBuffer buffer, uint32_t binding, uint32_t offset, uint32_t range) override;
 	void DestroyDescriptorSetLayout(const DescriptorSetLayoutInfo& layoutInfo) override;
 	// *******************
@@ -78,6 +106,9 @@ public:
 	// ************
 
 protected:
+	void DrawShadows(const View& view) override;
+	void DrawSingle(const View& view) override;
+
 	void UpdateProjection(const glm::mat4& projection) override;
 	void UpdateView(const glm::mat4& view) override;
 
@@ -94,13 +125,14 @@ private:
 	bool CreateLogicalDevice();
 	bool CreateMemoryAllocator();
 	bool CreateSwapChain();
-	bool CreateImageViews();
+	void CreateShadowPassImage();
 	bool CreateRenderPass();
-	void CreateColorResources();
-	void CreateDepthResources();
+	void CreateShadowPass();
 	bool CreateFrameBuffers();
+	void CreateShadowMappingFB();
 	bool CreateCommandPools();
 	bool CreateDescriptorPool();
+
 	void CreateRenderFrames();
 	void CreateRenderPipelines();
 	void SetupDebugMessenger();
@@ -110,9 +142,19 @@ private:
 	void RecreateSwapChain();
 
 	void RecordCommandBuffer(uint32_t imageIndex);
+	void ShadowRenderPass(const View& view);
+	void DebugShadowPass(uint32_t imageIndex, const View& view);
+	void DrawRenderPass(uint32_t imageIndex, const View& view);
+
+	void DrawShadowDebugQuad(const View& view);
+
+	void CreateColorResources();
+	void CreateDepthResources();
 
 	bool IsDeviceSuitable(VkPhysicalDevice device) const;
 	bool CheckDeviceExtensionSupport(VkPhysicalDevice device) const;
+
+	void CreateVertexBuffer(const std::vector<glm::vec3>& data, AllocatedBuffer& outBuffer);
 
 	int32_t RateDeviceSuitability(VkPhysicalDevice device) const;
 	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device) const;
@@ -125,7 +167,10 @@ private:
 	void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaAllocationCreateFlags memoryFlags, VkImage& outImage, VmaAllocation& outMemory);
 
 	VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
-	void TransitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
+	void TransitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
+
+	void TransitionShadowLayoutToFragment(VkCommandBuffer commandBuffer);
+	void TransitionShadowLayoutToGeometry(VkCommandBuffer commandBuffer);
 
 	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags bufferUsage, VmaMemoryUsage usage, VmaAllocationCreateFlags properties, VkBuffer& buffer, VmaAllocation& bufferMemory) const;
 	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, VkDeviceSize srcoffset, VkDeviceSize dstOffset);
@@ -144,35 +189,46 @@ private:
 	SingleTimeCommandBuffer BeginSingleTimeCommands(VkCommandPool commandPool, VkQueue queue);
 	void EndSingleTimeCommands(const SingleTimeCommandBuffer& commandBuffer);
 
+	void OnKeyPressed(uint32_t key, EKeyPressType pressType);
+
 	std::vector<const char*> GetRequiredExtensions() const;
 
 	VkContext context;
 
 	VkFormat swapChainImageFormat;
-	std::vector<VkImageView> swapChainImageViews;
-	std::vector<VkImage> swapChainImages;
-	std::vector<VkFramebuffer> swapChainFramebuffers;
+	SwapChainData swapChainData;
 
 	uint32_t currentFrame = 0;
-	AllocatedTexture depthImage;
-	AllocatedTexture colorImage;
+
+	// Shadows
+	std::array<ShadowMapData, MAX_FRAMES_IN_FLIGHT> shadowMapData;
+
+	// Need to track the shadow image since it will transfered between layouts to be sampled
+	VkImageLayout currentShadowImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	// *******
 
 	std::unordered_map<EPipelineType, RenderPipeline*> renderPipelines;
 
 	std::vector<Frame> renderFrames;
+	std::array<VkFramebuffer, MAX_FRAMES_IN_FLIGHT> additiveFrameBuffers;
 
 	std::vector<AllocatedBuffer> buffersPendingDelete;
 	std::vector<AllocatedTexture> imagesPendingDelete;
 
+	std::vector<const char*> instanceExtensions =
+	{
+		VK_EXT_DEBUG_UTILS_EXTENSION_NAME
+	};
+
 	std::vector<const char*> deviceExtensions =
 	{
-		VK_KHR_SWAPCHAIN_EXTENSION_NAME
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME		
 	};
 
 	// **** Editor *****
 	const std::vector<const char*> validationLayers =
 	{
-	"VK_LAYER_KHRONOS_validation"
+		"VK_LAYER_KHRONOS_validation"
 	};
 
 #if WITH_EDITOR

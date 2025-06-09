@@ -8,8 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-constexpr int32_t MAX_BONE_INFLUENCE = 4;
-constexpr int32_t MAX_BONES = 100;
+constexpr int32_t MAX_BONES = 200;
 constexpr uint32_t MAX_ANIMATED_ENTITIES = 100;
 
 struct KeyPosition
@@ -39,6 +38,7 @@ struct BoneInstance
 	int32_t numPositions;
 	int32_t numRotations;
 	int32_t numScales;
+	bool isRoot = false;
 };
 
 struct BoneInfo

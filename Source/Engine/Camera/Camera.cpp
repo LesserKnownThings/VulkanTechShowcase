@@ -6,7 +6,6 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/vector_angle.hpp>
 #include <glm/gtx/norm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 namespace Utilities
@@ -38,8 +37,24 @@ Camera::Camera(const CameraData& inData)
 
 void Camera::Initialize()
 {
+	shadowCascadeLevels.resize(4);
+	int32_t numCascades = shadowCascadeLevels.size();
+
+	float lambda = 0.5; // between 0 (linear) and 1 (logarithmic)
+	for (int i = 0; i < numCascades; ++i) {
+		float id = (i + 1) / float(numCascades);
+		float log = data.nearView * pow(data.farView / data.nearView, id);
+		float lin = data.nearView + (data.farView - data.nearView) * id;
+		shadowCascadeLevels[i] = glm::mix(lin, log, lambda);
+	}
+
+	/*shadowCascadeLevels[0] = data.farView * 0.05f;
+	shadowCascadeLevels[1] = data.farView * 0.15f;
+	shadowCascadeLevels[2] = data.farView * 0.40f;
+	shadowCascadeLevels[3] = data.farView * 0.90f;*/
+
 	GameEngine->GetRenderingSystem()->onWindowResizeParams.Bind(this, &Camera::HandleWindowResize);
-	UpdateVectors();
+	UpdateDirections();
 	UpdateProjectionType();
 }
 
@@ -69,9 +84,48 @@ void Camera::Rotate(const glm::vec3& axis, const glm::vec2& pitchClamp)
 	UpdateDirections();
 }
 
+std::vector<glm::vec4> Camera::GetWorldSpaceFrustumCorners(const glm::mat4& projection, const glm::mat4& view)
+{
+	const glm::mat4 inv = glm::inverse(projection * view);
+
+	std::vector<glm::vec4> corners;
+	for (uint32_t x = 0; x < 2; ++x)
+	{
+		for (uint32_t y = 0; y < 2; ++y)
+		{
+			for (uint32_t z = 0; z < 2; ++z)
+			{
+				glm::vec4 ndc =
+				{
+					2.0f * x - 1.0f,
+					2.0f * y - 1.0f,
+					z,
+					1.0f
+				};
+				glm::vec4 worldCoords = inv * ndc;
+				corners.emplace_back(worldCoords / worldCoords.w);
+			}
+		}
+	}
+
+	return corners;
+}
+
+glm::vec3 Camera::GetWorldSpaceFrustumCenter(const std::vector<glm::vec4>& corners)
+{
+	glm::vec3 center{};
+	for (const glm::vec4& corner : corners)
+	{
+		center += glm::vec3(corner);
+	}
+	center /= corners.size();
+
+	return center;
+}
+
 void Camera::UpdateDirections()
 {
-	glm::quat rotation{ data.eulers };
+	glm::quat rotation{ glm::radians(data.eulers) };
 	data.forward = glm::normalize(rotation * WORLD_FORWARD);
 	data.up = glm::normalize(rotation * WORLD_UP);
 	data.right = glm::normalize(rotation * WORLD_RIGHT);
@@ -102,8 +156,7 @@ void Camera::UpdateProjectionType()
 void Camera::SetPerspectiveCamera()
 {
 	const float aspectRatio = GameEngine->GetRenderingSystem()->GetAspectRatio();
-	data.projection = glm::perspectiveRH_ZO(glm::radians(data.fieldOfView), aspectRatio, data.nearView, data.farView);
-	data.projection[1][1] *= -1;
+	data.projection = glm::perspective(glm::radians(data.fieldOfView), aspectRatio, data.nearView, data.farView);
 }
 
 void Camera::SetOrthographicCamera()
@@ -114,14 +167,13 @@ void Camera::SetOrthographicCamera()
 	float right = data.ortographicSize * aspectRatio;
 
 	data.projection = glm::ortho(left, right, -data.ortographicSize, data.ortographicSize, -data.cameraZ, data.cameraZ);
-	data.projection[1][1] *= -1; // Flip Y because glm uses Open GL coordinates
 }
 
 void Camera::UpdateVectors()
 {
 	if (data.cameraType == ECameraType::Perspective)
 	{
-		data.view = glm::lookAt(
+		data.view = glm::lookAtLH(
 			data.position,
 			data.position + data.forward,
 			data.up);

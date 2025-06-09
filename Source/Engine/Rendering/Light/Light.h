@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Camera/Camera.h"
 #include "Rendering/AbstractData.h"
 #include "Utilities/Color.h"
 
@@ -62,10 +63,9 @@ struct LightInstance
 		bufferLayout.position = glm::vec4(position, glm::uintBitsToFloat(type));
 
 		const glm::quat rot = glm::quat(glm::radians(eulers));
-		glm::vec3 dir = rot * glm::vec3(0.0f, 0.0f, -1.0f);
-		dir.y *= -1.0f;
+		glm::vec3 dir = rot * WORLD_FORWARD;
 
-		bufferLayout.direction = glm::vec4(glm::normalize(dir), 0.0f);
+		bufferLayout.direction = glm::vec4(dir, 0.0f);
 		bufferLayout.color = glm::vec4(color, intensity);
 		constexpr float OUT_CUTOFF = 5.0f;
 		const float outerCutOff = angle + OUT_CUTOFF;

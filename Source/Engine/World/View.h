@@ -8,10 +8,12 @@ class LightSystem;
 
 struct View
 {
-	const Camera& camera;
-	const entt::registry& registry;
-	const std::vector<entt::entity>& entitiesInView;
-	const std::vector<entt::entity>& lightsInView;
+	Camera* camera;
+	
+	std::vector<entt::entity> entitiesInView;
+	std::vector<entt::entity> lightsInView;
+
+	entt::registry* registry;
 
 	AnimationSystem* animationSystem = nullptr;
 	LightSystem* lightSystem = nullptr;

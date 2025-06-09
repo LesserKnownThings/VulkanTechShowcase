@@ -7,18 +7,18 @@
 class PBRPipeline : public RenderPipeline
 {
 public:
+	PBRPipeline(const VkContext& inContext, RenderingInterface* inRenderingInterface);
+
 	EPipelineType GetType() const override { return EPipelineType::PBR; }
 
-protected:
-	bool CreateVertexSpecializationInfo(VkSpecializationInfo& outInfo) override;
-	bool CreateFragmentSpecializationInfo(VkSpecializationInfo& outInfo) override;
+private:
+	void CreatePipelineDescriptorLayoutSets(std::array<VkDescriptorSetLayout, 5>& outDescriptorSetLayouts);
 
-	void CreateVertexInputInfo(std::vector<VkVertexInputBindingDescription>& bindingDescriptions, std::vector<VkVertexInputAttributeDescription>& attributeDescriptions) override;
-	std::vector<VkSpecializationMapEntry> CreateVertexSpecializationMap(size_t& dataSize) override;
-	void CreatePipelineDescriptorLayoutSets(std::vector<VkDescriptorSetLayout>& outDescriptorSetLayouts) override;
-	std::vector<VkSpecializationMapEntry> CreateFragmentSpecializationMap(size_t& dataSize) override;
+	const std::string shaderPath = "Data/Engine/Shaders/PBR";
 
-	std::vector<VkPushConstantRange> GetPipelinePushConstants() override;
-
-	std::string GetShaderPath() const override { return "Data/Engine/Shaders/PBR"; }
+	std::vector<VkDynamicState> dynamicStates =
+	{
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR
+	};
 };

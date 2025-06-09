@@ -12,7 +12,6 @@
 struct AnimationLayout
 {
 	alignas(16) std::array<glm::mat4, MAX_BONES> transforms;
-	alignas(16) std::array<AlignedMatrix3, MAX_BONES> normals;
 };
 
 struct AnimationData

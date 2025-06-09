@@ -28,6 +28,8 @@ public:
 	RenderingInterface* GetRenderingSystem() const { return renderingInterface; }
 	InputSystem* GetInputSystem() const { return inputSystem; }
 
+	World* GetCurrentWorld() const { return currentWorld; }
+
 private:
 	void InitializeECSSystems();
 	void UnInitializeECSSystems();

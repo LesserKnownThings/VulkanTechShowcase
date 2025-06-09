@@ -11,7 +11,6 @@
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 #include <cassert>
-#include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <iostream>
 #include <limits>
@@ -86,12 +85,9 @@ namespace Utilities
 	{
 		for (int32_t boneIndex = 0; boneIndex < mesh->mNumBones; ++boneIndex)
 		{
-			std::string boneName = mesh->mBones[boneIndex]->mName.C_Str();
+			EngineName boneName{ mesh->mBones[boneIndex]->mName.C_Str() };
 
-			EngineName eBoneName{ boneName };
-
-			auto it = skeletonData.boneInfoMap.find(eBoneName);
-			if (it == skeletonData.boneInfoMap.end())
+			if (!skeletonData.boneInfoMap.contains(boneName))
 			{
 				BoneInfo newBone{};
 				newBone.id = skeletonData.boneInfoCount++;
@@ -99,8 +95,6 @@ namespace Utilities
 				skeletonData.boneInfoMap.emplace(boneName, newBone);
 			}
 		}
-
-		std::string test;
 	}
 
 	void MatchAnimationSkeletonBones(const aiAnimation* animation, const SkeletonData& skeletonData, AnimationData& animationData)
@@ -108,7 +102,6 @@ namespace Utilities
 		const int32_t size = animation->mNumChannels;
 
 		const auto& boneInfoMap = skeletonData.boneInfoMap;
-		const int32_t boneInfoCount = skeletonData.boneInfoCount;
 
 		for (int32_t i = 0; i < size; ++i)
 		{
@@ -263,8 +256,6 @@ namespace Utilities
 				}
 			}
 		}
-
-		std::string test;
 	}
 
 	void ProcessNodeForModel(aiNode* node, const aiScene* scene, MeshData& meshData, size_t& globalVertexOffset, size_t& globalIndexOffset)
@@ -315,7 +306,8 @@ void MeshImporter::ImportModel(const std::string& path, MeshData& outMeshData)
 		aiProcess_Triangulate
 		| aiProcess_GenSmoothNormals
 		| aiProcess_FlipUVs
-		| aiProcess_CalcTangentSpace);
+		| aiProcess_CalcTangentSpace
+		| aiProcess_ConvertToLeftHanded);
 
 	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
 	{
@@ -330,7 +322,9 @@ void MeshImporter::ImportSkeleton(const std::string& path, SkeletonData& outSkel
 {
 	Assimp::Importer import;
 	const aiScene * scene = import.ReadFile(path,
-		aiProcess_Triangulate);
+		aiProcess_Triangulate |
+		aiProcess_OptimizeGraph |
+		aiProcess_ConvertToLeftHanded);
 
 	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
 	{
@@ -339,16 +333,13 @@ void MeshImporter::ImportSkeleton(const std::string& path, SkeletonData& outSkel
 	}
 
 	ProcessMeshForSkeleton(scene->mRootNode, scene, outSkeletonData);
-
-	std::vector<glm::mat4> previousTransforms{};
-	ReadBoneHierarchyData(scene->mRootNode, outSkeletonData, outSkeletonData.rootBone, previousTransforms);
+	ReadBoneHierarchyData(scene->mRootNode, outSkeletonData, outSkeletonData.rootBone);
 }
 
 bool MeshImporter::ImportAnimation(const std::string& path, const SkeletonData& skeletonData, AnimationData& outAnimationData)
 {
 	Assimp::Importer import;
-	const aiScene * scene = import.ReadFile(path,
-		aiProcess_Triangulate);
+	const aiScene * scene = import.ReadFile(path, aiProcess_Triangulate | aiProcess_ConvertToLeftHanded);
 
 	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
 	{
@@ -386,49 +377,36 @@ void MeshImporter::ProcessMeshForSkeleton(aiNode* node, const aiScene* scene, Sk
 	}
 }
 
-void MeshImporter::ReadTempHierarchyData(aiNode* src, const SkeletonData& skeletonData, BoneNode& root, std::vector<glm::mat4>& previousTrasforms)
+bool IsAssimpFbxHelperNode(const std::string& name)
 {
-	previousTrasforms.emplace_back(AssimpGLMHelpers::ConvertMatrixToGLMFormat(src->mTransformation));
-
-	for (int i = 0; i < src->mNumChildren; ++i)
-	{
-		std::string name = src->mChildren[i]->mName.C_Str();
-		if (name.find("Assimp") != std::string::npos)
-		{
-			ReadTempHierarchyData(src->mChildren[i], skeletonData, root, previousTrasforms);
-		}
-		else
-		{
-			BoneNode newData{};
-			ReadBoneHierarchyData(src->mChildren[i], skeletonData, newData, previousTrasforms);
-			root.children.push_back(newData);
-		}
-	}
+	return name.find("Assimp") != std::string::npos;
 }
 
-void MeshImporter::ReadBoneHierarchyData(aiNode* src, const SkeletonData& skeletonData, BoneNode& root, std::vector<glm::mat4>& previousTrasforms)
+void MeshImporter::ReadBoneHierarchyData(aiNode* src, SkeletonData& skeletonData, BoneNode& root)
 {
-	root.name = EngineName{ src->mName.C_Str() };
-	root.transform = AssimpGLMHelpers::ConvertMatrixToGLMFormat(src->mTransformation);	
-	for (const glm::mat4& transform : previousTrasforms)
+	while (src->mNumChildren == 1 && IsAssimpFbxHelperNode(src->mName.C_Str()))
 	{
-		root.transform *= transform;
+		aiMatrix4x4 combinedTransform = src->mTransformation * src->mChildren[0]->mTransformation;
+		src = src->mChildren[0];
+		src->mTransformation = combinedTransform;
 	}
-	previousTrasforms.clear();
+
+	root.name = EngineName{ src->mName.data };
+
+	if (skeletonData.boneInfoMap.find(root.name) == skeletonData.boneInfoMap.end())
+	{
+		BoneInfo info{};
+		info.id = skeletonData.boneInfoCount++;
+		skeletonData.boneInfoMap[root.name] = info;
+	}
+
+	root.transform = AssimpGLMHelpers::ConvertMatrixToGLMFormat(src->mTransformation);
 	root.childrenCount = src->mNumChildren;
 
-	for (int i = 0; i < src->mNumChildren; ++i)
+	for (int32_t i = 0; i < src->mNumChildren; ++i)
 	{
-		std::string name = src->mChildren[i]->mName.C_Str();
-		if (name.find("Assimp") != std::string::npos)
-		{
-			ReadTempHierarchyData(src->mChildren[i], skeletonData, root, previousTrasforms);
-		}
-		else
-		{
-			BoneNode newData{};
-			ReadBoneHierarchyData(src->mChildren[i], skeletonData, newData, previousTrasforms);
-			root.children.push_back(newData);
-		}
+		BoneNode node{};
+		ReadBoneHierarchyData(src->mChildren[i], skeletonData, node);
+		root.children.push_back(node);
 	}
 }

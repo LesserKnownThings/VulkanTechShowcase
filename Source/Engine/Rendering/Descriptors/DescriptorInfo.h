@@ -15,7 +15,8 @@ enum class EDescriptorOwner : uint8_t
 {
 	None,
 	View,
-	Material
+	Material,
+	LightSystem
 };
 
 /// <summary>
@@ -35,8 +36,6 @@ struct DescriptorSetLayoutInfo
 /// </summary>
 struct DescriptorBindingInfo
 {
-	EDescriptorOwner owner;
-	uint32_t set = 0;
 	uint32_t binding = 0;
 	size_t type;
 	size_t stage;
@@ -44,7 +43,7 @@ struct DescriptorBindingInfo
 };
 
 enum class EDescriptorDataProviderType
-{
+{	
 	None,
 	Texture,
 	Buffer,

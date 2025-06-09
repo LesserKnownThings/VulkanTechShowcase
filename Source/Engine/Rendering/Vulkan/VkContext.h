@@ -37,6 +37,8 @@ struct VkContext
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
 	VkSwapchainKHR swapChain = VK_NULL_HANDLE;
 	VkRenderPass renderPass = VK_NULL_HANDLE;
+	VkRenderPass shadowPass = VK_NULL_HANDLE;
+	VkRenderPass additivePass = VK_NULL_HANDLE;
 	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 	QueueFamilyIndices familyIndices;

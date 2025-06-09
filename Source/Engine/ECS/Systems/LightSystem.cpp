@@ -25,6 +25,18 @@ Light LightSystem::CreateLight(const entt::entity& entity, CommonLightData* ligh
 	}
 }
 
+const LightInstance& LightSystem::GetInstance(uint32_t handle) const
+{
+	auto it = lights.find(handle);
+	if (it != lights.end())
+	{
+		return it->second;
+	}
+
+	throw std::runtime_error("Failed to get light instance, the handle might be invalid!");
+	return LightInstance{};
+}
+
 Light LightSystem::CreateDirectionalLight(const entt::entity& entity, CommonLightData* data)
 {
 	uint32_t currentID = GenerateHandle();
@@ -35,7 +47,7 @@ Light LightSystem::CreateDirectionalLight(const entt::entity& entity, CommonLigh
 		LightInstance& ref = lights[currentID];
 		ref.eulers = transform->eulers;
 		ref.type = static_cast<uint32_t>(ELightType::Directional);
-		ref.intensity = data->intensity;		
+		ref.intensity = data->intensity;
 		ref.color = data->color.GetVector();
 
 		UpdateLightBuffer(currentID, ref);

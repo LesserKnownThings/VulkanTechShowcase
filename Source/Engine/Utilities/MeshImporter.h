@@ -20,6 +20,5 @@ public:
 
 private:
 	static void ProcessMeshForSkeleton(aiNode* node, const aiScene* scene, SkeletonData& skeletonData);
-	static void ReadTempHierarchyData(aiNode* src, const SkeletonData& skeletonData, BoneNode& root, std::vector<glm::mat4>& previousTrasforms);
-	static void ReadBoneHierarchyData(aiNode* src, const SkeletonData& skeletonData, BoneNode& root, std::vector<glm::mat4>& previousTrasforms);
+	static void ReadBoneHierarchyData(aiNode* src, SkeletonData& skeletonData, BoneNode& root);
 };

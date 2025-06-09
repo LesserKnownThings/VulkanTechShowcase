@@ -25,7 +25,10 @@ if(WITH_EDITOR EQUAL 1)
 endif()
 
 #Look for third party libs
-add_compile_definitions(VK_NO_PROTOTYPES)
+add_compile_definitions(
+    VK_NO_PROTOTYPES
+    GLM_FORCE_LEFT_HANDED
+    GLM_FORCE_DEPTH_ZERO_TO_ONE)
 
 find_package(sdl3 CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
